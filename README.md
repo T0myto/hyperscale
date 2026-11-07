@@ -4,8 +4,8 @@ Jeu de gestion d'une salle de datacenter pour réviser le **BTS SIO option SISR*
 
 ## Jouer
 
+- **En ligne** : https://t0myto.github.io/hyperscale/
 - **En local** : ouvre `index.html` dans un navigateur. Le dossier `dc/` doit rester à côté.
-- **En ligne** : active GitHub Pages sur la branche `main` (Settings → Pages), puis ouvre l'adresse indiquée.
 
 La partie est sauvegardée dans le navigateur (`localStorage`).
 
