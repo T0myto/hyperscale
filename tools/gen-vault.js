@@ -44,7 +44,7 @@ function html2md(h) {
 const ficheFile = f => `${pad2(FICHES.indexOf(f) + 1)} - ${safe(f.title)}`;
 const ficheLink = id => { const f = FICHES.find(x => x.id === id); return `[[Fiches/${ficheFile(f)}|${f.title}]]`; };
 const ACCUEIL = '[[00 - Accueil|Accueil]]';
-const GAME_URL = 'https://claude.ai/artifact/GbUhoBfkqBvx8voYc4PTXE';
+const GAME_URL = 'https://t0myto.github.io/hyperscale/';
 
 /* ---------- état d'exemple pour les incidents et la console ---------- */
 API.newState();
