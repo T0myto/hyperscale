@@ -49,6 +49,12 @@ for (const rel of new Set(Object.values(MAP).flat())) {
   md = md.replace(/^---\n[\s\S]*?\n---\n/, '');           // propriétés Obsidian
   md = md.replace(/%%[\s\S]*?%%/g, '');                    // commentaires Obsidian
   md = md.split('\n').filter(l => !/^← /.test(l)).join('\n'); // ligne de navigation du vault
+  // Les fiches sont des cours, sans quiz : la partie « Exercices » (questions et corrections) est retirée,
+  // seul son encadré « À retenir » est gardé.
+  md = md.replace(/^## Exercices[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m, (m, body) => {
+    const keep = body.split(/\n\s*\n/).filter(b => /^> \[!retenir\]/.test(b.trim()));
+    return keep.length ? keep.join('\n\n') + '\n\n' : '';
+  });
   const h1 = md.match(/^# (.+)$/m);
   const title = h1 ? h1[1].trim() : path.basename(rel, '.md');
   if (h1) md = md.replace(h1[0], '');
