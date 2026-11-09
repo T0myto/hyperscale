@@ -3,19 +3,19 @@
 const fs = require('fs'), path = require('path');
 const [GAME, VAULT] = process.argv.slice(2);
 global.localStorage = { getItem() { return null; }, setItem() {} };
-const src = ['data', 'sim', 'actions', 'learn', 'console'].map(f => fs.readFileSync(path.join(GAME, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
+const src = ['data', 'sim', 'actions', 'learn', 'console', 'cours'].map(f => fs.readFileSync(path.join(GAME, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
 const API = new Function(src + `
-return { FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, IF_CMDS, CONF_CMDS, RIF_CMDS, LINE_CMDS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
+return { COURS, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, IF_CMDS, CONF_CMDS, RIF_CMDS, LINE_CMDS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
   newState, actAccept, actPlace, actPlug, actConnect, actPortCfg, actDeploy, actAddRule, actAddDisk, actSetRaid, actInstallRack, derive, devsOfKind, cmdList,
   get S(){ return S; }, freeIp };`)();
-const { FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES } = API;
+const { COURS, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES } = API;
 
 /* ---------- utilitaires ---------- */
-// Garde la progression déjà cochée dans les notes existantes (revise, quiz_reussi, maitrise).
+// Garde la progression déjà cochée dans les notes existantes (revise, maitrise).
 function keepProgress(p, txt) {
   if (!fs.existsSync(p)) return txt;
   const old = fs.readFileSync(p, 'utf8');
-  for (const k of ['revise', 'quiz_reussi', 'maitrise']) if (new RegExp(`^${k}: true$`, 'm').test(old)) txt = txt.replace(new RegExp(`^${k}: false$`, 'm'), `${k}: true`);
+  for (const k of ['revise', 'maitrise']) if (new RegExp(`^${k}: true$`, 'm').test(old)) txt = txt.replace(new RegExp(`^${k}: false$`, 'm'), `${k}: true`);
   return txt;
 }
 const write = (rel, txt) => { const p = path.join(VAULT, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, keepProgress(p, txt.replace(/\n{3,}/g, '\n\n').trim() + '\n'), 'utf8'); written.push(rel); };
@@ -86,38 +86,44 @@ const oldProg = {};
 const fdir = path.join(VAULT, 'Fiches');
 if (fs.existsSync(fdir)) for (const fn of fs.readdirSync(fdir)) {
   const t = fs.readFileSync(path.join(fdir, fn), 'utf8'), m = t.match(/^fiche: (\w+)$/m);
-  if (m) oldProg[m[1]] = ['revise', 'quiz_reussi'].filter(k => new RegExp(`^${k}: true$`, 'm').test(t));
+  if (m) oldProg[m[1]] = ['revise'].filter(k => new RegExp(`^${k}: true$`, 'm').test(t));
 }
 const withProg = (id, txt) => (oldProg[id] || []).reduce((x, k) => x.replace(new RegExp(`^${k}: false$`, 'm'), `${k}: true`), txt);
 const taughtBy = id => CONTRACTS.map((c, i) => c.notions.includes(id) ? `- ${i + 1}. ${c.client}${c.mission ? ' (mission)' : ''}, chapitre ${c.chap}` : '').filter(Boolean);
+// Note de cours reprise dans la fiche : titres décalés d'un niveau, liens vers les autres notes du cours en italique
+// (elles ne sont pas dans ce vault), images gardées : elles sont copiées dans Jeu/cours/img.
+function coursMd(md) {
+  let fence = false;
+  return md.split('\n').map(l => {
+    if (/^\s*```/.test(l)) { fence = !fence; return l; }
+    if (fence) return l;
+    if (/^#{1,5} /.test(l)) l = '#' + l;
+    return l.replace(/(^|[^!])\[\[([^\]|#\\]+)(?:#[^\]|\\]*)?(?:\\?\|([^\]]+))?\]\]/g, (m, p, t, a) => `${p}*${(a || t).trim()}*`);
+  }).join('\n');
+}
+const coursNotes = id => (COURS.fiches[id] || []).map(k => COURS.notes[k]);
 for (const f of FICHES) {
-  const quiz = f.quiz.map((q, i) => { const ord = shuffle(q.o.length, f.id + i); return { q, ord, good: ord.indexOf(q.a) }; });
   const inc = Object.entries(INCIDENTS).filter(([, d]) => d.fiche === f.id).map(([k, d]) => `- [[Incidents/${safe(d.title)}|${d.title}]]`);
+  const notes = coursNotes(f.id);
   write(`Fiches/${ficheFile(f)}.md`, withProg(f.id, `---
 tags: [jeu-sisr, fiche]
 fiche: ${f.id}
 revise: false
-quiz_reussi: false
 ---
 
 # ${f.title}
 
 ← ${ACCUEIL} · Toutes les fiches : [[Fiches/00 - Sommaire des fiches|Sommaire]]
 
-> [!info] Source
-> Note du vault **cours-sisr-main** : *${f.vault}*. Cette fiche est celle du jeu Hyperscale, complétée pour le datacenter.
+> [!info] Contenu
+> ${notes.length ? `Le résumé du jeu Hyperscale, puis ta note de cours complète (vault **cours-sisr-main**) : ${notes.map(n => `*${n.name}*`).join(', ')}.` : "Le résumé du jeu Hyperscale. Ton cours (vault **cours-sisr-main**) n'a pas de note sur ce sujet, propre au datacenter : cette fiche en tient lieu."}
 
 ${html2md(f.html)}
 
 > [!tip] À retenir
 > ${f.retenir}
-
-## Quiz
-
-${quiz.map(({ q, ord }, i) => `**${i + 1}. ${q.q}**\n${ord.map((j, k) => `- ${L[k]}) ${q.o[j]}`).join('\n')}`).join('\n\n')}
-
-> [!success]- Correction
-${quiz.map(({ q, good }, i) => `> ${i + 1}. **${L[good]}) ${q.o[q.a]}**. ${q.e}`).join('\n')}
+${notes.map(n => `\n---\n\n## 📗 Note de cours : ${n.title}\n\n${coursMd(n.md)}\n`).join('')}
+${inc.length || taughtBy(f.id).length ? '\n---\n' : ''}
 ${inc.length ? `\n## Incidents du jeu liés à cette fiche\n\n${inc.join('\n')}` : ''}
 ${taughtBy(f.id).length ? `\n## Où le jeu l'enseigne\n\n${taughtBy(f.id).join('\n')}\n\nVoir [[Référence/Contrats et progression|Contrats et progression]].` : ''}
 `));
@@ -681,8 +687,6 @@ fs.writeFileSync(path.join(VAULT, 'Progression.base'), `filters:
 properties:
   note.revise:
     displayName: Révisée
-  note.quiz_reussi:
-    displayName: Quiz réussi
   note.maitrise:
     displayName: Maîtrisé
   note.fiche:
@@ -697,7 +701,6 @@ views:
     order:
       - file.name
       - revise
-      - quiz_reussi
     sort:
       - property: file.name
         direction: ASC
@@ -709,7 +712,6 @@ views:
     order:
       - file.name
       - revise
-      - quiz_reussi
     sort:
       - property: file.name
         direction: ASC
@@ -745,7 +747,7 @@ Le simulateur de datacenter du jeu Hyperscale, et tout ce qu'il enseigne, en not
 ## Apprendre
 
 - [[Référence/Contrats et progression|Le parcours]] : ${CHAPTERS.length} chapitres, ${CONTRACTS.length} contrats, des notions vues en cours jusqu'aux ACL
-- [[Fiches/00 - Sommaire des fiches|Les ${FICHES.length} fiches de cours]], chacune avec son quiz
+- [[Fiches/00 - Sommaire des fiches|Les ${FICHES.length} fiches de cours]] : le résumé du jeu, puis ta note de cours complète
 - [[Incidents/00 - Méthode et liste des incidents|Méthode de dépannage et les ${incList.length} incidents]]
 - [[Progression.base|Progression]] : fiches à réviser, incidents maîtrisés
 
@@ -767,7 +769,7 @@ Le simulateur de datacenter du jeu Hyperscale, et tout ce qu'il enseigne, en not
 
 \`\`\`mermaid
 flowchart LR
-    J(("Hyperscale")) --> F["Fiches<br/>cours et quiz"]
+    J(("Hyperscale")) --> F["Fiches<br/>résumé et cours"]
     J --> I["Incidents<br/>dépannage"]
     J --> R["Référence<br/>matériel, adressage, contrats"]
     J --> M["Aide-mémoire<br/>commandes, glossaire"]
@@ -783,6 +785,8 @@ const page = fs.readFileSync(path.join(GAME, 'hyperscale.html'), 'utf8');
 fs.mkdirSync(path.join(VAULT, 'Jeu', 'dc'), { recursive: true });
 fs.writeFileSync(path.join(VAULT, 'Jeu', 'hyperscale.html'), '<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n</head>\n<body>\n' + page + '\n</body>\n</html>\n', 'utf8');
 written.push('Jeu/hyperscale.html');
+fs.mkdirSync(path.join(VAULT, 'Jeu', 'cours', 'img'), { recursive: true });
+for (const f of fs.readdirSync(path.join(GAME, 'cours', 'img'))) { fs.copyFileSync(path.join(GAME, 'cours', 'img', f), path.join(VAULT, 'Jeu', 'cours', 'img', f)); written.push('Jeu/cours/img/' + f); }
 for (const f of fs.readdirSync(path.join(GAME, 'dc'))) { fs.copyFileSync(path.join(GAME, 'dc', f), path.join(VAULT, 'Jeu', 'dc', f)); written.push('Jeu/dc/' + f); }
 write('Jeu/Lancer le jeu.md', `---
 tags: [jeu-sisr, jeu]
@@ -803,7 +807,10 @@ tags: [jeu-sisr, jeu]
 | \`dc/data.js\` | Matériel, câbles, plan d'adressage, services, contrats |
 | \`dc/sim.js\` | Simulation : électricité, liens, VLAN, flux, chaleur, contrats |
 | \`dc/actions.js\` | Actions du joueur et commandes équivalentes |
-| \`dc/learn.js\` | Fiches, quiz et incidents |
+| \`dc/learn.js\` | Fiches et incidents |
+| \`dc/cours.js\` | Notes de cours du vault cours-sisr-main, affichées dans les fiches |
+| \`dc/md.js\` | Affichage de ces notes (Markdown, encadrés, schémas) |
+| \`cours/img\` | Images des notes de cours |
 | \`dc/console.js\` | Console et sorties des commandes |
 | \`dc/view.js\` | Dessin d'une baie, face avant et face arrière |
 | \`dc/room.js\` | La salle vue de dessus et le déplacement du technicien |
@@ -824,7 +831,7 @@ for (const dir of ['Fiches', 'Incidents', 'Référence', 'Aide-mémoire', 'Jeu']
       const p = path.join(d, f), rel = path.relative(VAULT, p);
       if (fs.statSync(p).isDirectory()) { walk(p); continue; }
       if (keep.has(rel)) continue;
-      const gen = rel.startsWith(path.join('Jeu', 'dc')) || (f.endsWith('.md') && /^tags: \[jeu-sisr/m.test(fs.readFileSync(p, 'utf8')));
+      const gen = rel.startsWith(path.join('Jeu', 'dc')) || rel.startsWith(path.join('Jeu', 'cours')) || (f.endsWith('.md') && /^tags: \[jeu-sisr/m.test(fs.readFileSync(p, 'utf8')));
       if (gen) { fs.unlinkSync(p); console.log('supprimé (obsolète) : ' + rel); }
     }
   })(path.join(VAULT, dir));

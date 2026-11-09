@@ -278,13 +278,13 @@ ${def.notions.length ? `<h4>Ce que tu vas apprendre</h4><div class="ncards">${de
 <div class="btnrow"><button class="btn primary big" data-close>C'est parti</button></div>`;
   modal(`${def.mission ? 'Mission' : 'Contrat'} : ${def.client}`, s, m => m.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => openFiches(b.dataset.f))));
 }
-// Après la livraison : ce qu'il faut retenir, le quiz, la suite
+// Après la livraison : ce qu'il faut retenir, les fiches à relire, la suite
 function openDebrief(cs, def) {
   const idx = CONTRACTS.findIndex(c => c.id === cs.id), next = CONTRACTS[idx + 1];
   const newChap = next && next.chap !== def.chap ? CHAPTERS.find(x => x.n === next.chap) : null;
   const s = `<p class="lead">+${money(def.bonus)} et +40 XP${def.rev ? `, puis ${money(def.rev)} par heure tant que le service tourne` : ''}.</p>
 ${def.unlock.length ? `<p>🔓 Débloqué : <b>${def.unlock.map(u => esc(unlockName(u))).join(', ')}</b></p>` : ''}
-${def.notions.length ? `<h4>À retenir</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); if (!f) return ''; const q = S.codex.quiz[id] || {}, nq = Object.keys(q).length; return `<article class="ncard"><b>📘 ${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small ${nq < f.quiz.length ? 'primary' : ''}" data-f="${id}">${nq < f.quiz.length ? `Faire le quiz (${f.quiz.length - nq} question${f.quiz.length - nq > 1 ? 's' : ''})` : 'Quiz terminé ✓'}</button></article>`; }).join('')}</div><p class="note">Chaque bonne réponse au quiz rapporte 10 XP et 60 €.</p>` : ''}
+${def.notions.length ? `<h4>À retenir</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); if (!f) return ''; return `<article class="ncard"><b>📘 ${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small" data-f="${id}">${coursOf(id).length ? 'Relire la fiche et le cours' : 'Relire la fiche'}</button></article>`; }).join('')}</div>` : ''}
 ${TEACH[cs.id] ? `<p class="warnbox">⚠️ Reste attentif : une panne liée à ce que tu viens d'installer va bientôt arriver. Elle s'ouvrira en ticket.</p>` : ''}
 ${newChap ? `<p class="infobox">🏁 Chapitre ${def.chap} terminé ! Prochain chapitre : <b>${esc(newChap.name)}</b>. ${esc(newChap.desc)}</p>` : next ? `<p class="muted">Prochain contrat : <b>${esc(next.client)}</b>.</p>` : ''}
 <div class="btnrow"><button class="btn primary big" data-close>Continuer</button></div>`;
@@ -767,31 +767,34 @@ function openDeploy(k, svcKey) {
     fillSto(); check();
   });
 }
+// Notes de cours liées à une fiche (vault cours-sisr-main), rendues une seule fois
+const coursOf = id => (typeof COURS !== 'undefined' && COURS.fiches[id] || []).map(k => COURS.notes[k]).filter(Boolean);
+const coursHtml = {};
+function noteHtml(n) { return coursHtml[n.name] || (coursHtml[n.name] = mdRender(n.md)); }
+// Une fiche : le résumé du jeu, puis la ou les notes de cours complètes
 function openFiches(id) {
   const f0 = FICHE(id) || FICHES[0];
   const render = f => {
-    const done = S.codex.quiz[f.id] || {};
-    let s = `<div class="fiches"><nav class="flist">${FICHES.map(x => `<button data-f="${x.id}" class="${x.id === f.id ? 'on' : ''}">${esc(x.title)}${Object.keys(S.codex.quiz[x.id] || {}).length === x.quiz.length ? ' <i class="ck">✓</i>' : S.codex.seen[x.id] ? ' <i class="new">•</i>' : ''}</button>`).join('')}</nav><section class="fbody"><div class="eyebrow">Note du vault : ${esc(f.vault)}</div><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p><h4>Quiz</h4>`;
-    f.quiz.forEach((q, i) => {
-      const d = done[i];
-      s += `<div class="q" data-q="${i}"><p><b>${i + 1}.</b> ${esc(q.q)}</p>${shuffleIdx(q.o.length, f.id + i).map(j => `<label class="qo ${d !== undefined ? (j === q.a ? 'right' : d === j ? 'wrong' : '') : ''}"><input type="radio" name="q${i}" value="${j}" ${d !== undefined ? 'disabled' : ''} ${d === j ? 'checked' : ''}> ${esc(q.o[j])}</label>`).join('')}${d !== undefined ? `<p class="qe ${d === q.a ? 'good' : 'bad'}">${d === q.a ? 'Exact.' : 'Pas tout à fait.'} ${esc(q.e)}</p>` : `<button class="btn small" data-qv="${i}">Valider</button>`}</div>`;
-    });
+    const notes = coursOf(f.id);
+    let s = `<div class="fiches"><nav class="flist">${FICHES.map(x => `<button data-f="${x.id}" class="${x.id === f.id ? 'on' : ''}">${esc(x.title)}${S.codex.seen[x.id] ? '' : ' <i class="new" title="Pas encore ouverte">•</i>'}</button>`).join('')}</nav>`;
+    s += `<section class="fbody"><div class="eyebrow">Fiche du jeu</div><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p>`;
+    if (notes.length) {
+      s += `<nav class="ctoc"><b>📗 Note${notes.length > 1 ? 's' : ''} de cours complète${notes.length > 1 ? 's' : ''} :</b> ${notes.map((n, i) => `<a href="#cours-${i}" data-goto="${i}">${esc(n.title)}</a>`).join(' · ')}</nav>`;
+      s += notes.map((n, i) => `<article class="cours" id="cours-${i}"><div class="eyebrow">📗 Note de cours · vault cours-sisr-main</div><h3>${esc(n.title)}</h3>${noteHtml(n)}</article>`).join('');
+    } else s += `<p class="infobox">📗 Ton cours (vault cours-sisr-main) n'a pas de note sur ce sujet, propre au datacenter : cette fiche du jeu en tient lieu.</p>`;
     return s + `</section></div>`;
   };
   modal('Fiches de cours', render(f0), m => {
-    const bind = f => {
-      m.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => { m.querySelector('.mbody').innerHTML = render(FICHE(b.dataset.f)); bind(FICHE(b.dataset.f)); }));
-      m.querySelectorAll('[data-qv]').forEach(b => b.addEventListener('click', () => {
-        const i = +b.dataset.qv, sel = m.querySelector(`input[name=q${i}]:checked`); if (!sel) return;
-        const q = f.quiz[i], ans = +sel.value;
-        S.codex.quiz[f.id] = S.codex.quiz[f.id] || {};
-        S.codex.quiz[f.id][i] = ans;
-        if (ans === q.a) { S.xp += 10; S.money += 60; toast('Bonne réponse : +10 XP, +60 €', 'good'); }
-        S.codex.seen[f.id] = true;
-        m.querySelector('.mbody').innerHTML = render(f); bind(f); renderTop();
-      }));
+    const show = f => {
+      S.codex.seen[f.id] = true;
+      const body = m.querySelector('.mbody');
+      body.innerHTML = render(f);
+      body.scrollTop = 0; const fb = body.querySelector('.fbody'); if (fb) fb.scrollTop = 0;
+      body.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => show(FICHE(b.dataset.f))));
+      body.querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = body.querySelector('#cours-' + a.dataset.goto); if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' }); }));
+      mdDiagrams(body);
     };
-    bind(f0);
+    show(f0);
   }, true);
 }
 function shuffleIdx(n, seed) { const a = [...Array(n).keys()]; let h = hhash(String(seed)); for (let i = n - 1; i > 0; i--) { h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; const j = h % (i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
@@ -855,7 +858,7 @@ function openRecette(cs) {
 }
 function openHelp(first) {
   const s = `<p class="lead">Tu reprends une salle de datacenter vide. Des clients signent des contrats : tu installes le matériel, tu câbles, tu configures et tu testes. Chaque contrat t'apprend une notion du BTS SIO SISR, des plus simples aux plus avancées.</p>
-<ol class="howto"><li><b>🎯 Lis ton contrat</b> dans le panneau de droite : il donne les étapes, une par une.</li><li><b>👉 Clique « Montrer »</b> : le jeu t'amène au bon endroit.</li><li><b>📘 Ouvre la fiche</b> de chaque notion (« Pourquoi ? ») et fais son quiz.</li></ol>
+<ol class="howto"><li><b>🎯 Lis ton contrat</b> dans le panneau de droite : il donne les étapes, une par une.</li><li><b>👉 Clique « Montrer »</b> : le jeu t'amène au bon endroit.</li><li><b>📘 Ouvre la fiche</b> de chaque notion (« Pourquoi ? ») : le résumé du jeu, puis ta note de cours complète.</li></ol>
 <div class="two help"><div><h4>🏢 Dans la salle</h4><ul><li>Marche avec les <b>flèches</b> ou <b>ZQSD</b>, ou clique sur le sol.</li><li>Clique un <b>emplacement libre</b> pour poser une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les opérateurs arrivent en <b>salle MMR</b> (à gauche), l'électricité dans le <b>local</b> à droite.</li></ul></div>
 <div><h4>🗄️ Dans une baie</h4><ul><li><b>F</b> : face avant (disques) ou arrière (ports et prises). PDU A en rouge, B en bleu.</li><li><b>Double-clic</b> sur un équipement : sa fenêtre avec les onglets Physique, Config, CLI et Aide.</li><li>Clique un <b>port libre</b>, puis un second : tu poses un câble.</li></ul></div></div>
 <p class="note">Échap annule ou revient à la salle · F tourne la baie · Espace met en pause.</p>
@@ -1255,7 +1258,7 @@ function winAide(w) {
   let s = '';
   if (KIND_GUIDE[k]) s += `<article class="card guide"><h4>🧭 Comment s'en servir</h4><ol class="steps">${KIND_GUIDE[k].map(t => `<li><span>${esc(t)}</span></li>`).join('')}</ol></article>`;
   s += `<div class="chips">${ids.map((id, i) => `<button class="chipc ${FICHE(id) === f ? 'on' : ''}" data-act="wfiche" data-i="${i}">📘 ${esc(FICHE(id).title)}</button>`).join('')}</div>`;
-  s += `<article class="card fbody"><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p><button class="btn primary" data-act="fiche" data-id="${f.id}">Ouvrir la fiche complète et son quiz</button></article>`;
+  s += `<article class="card fbody"><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p><button class="btn primary" data-act="fiche" data-id="${f.id}">${coursOf(f.id).length ? '📗 Ouvrir la fiche et la note de cours' : 'Ouvrir la fiche complète'}</button></article>`;
   return s;
 }
 

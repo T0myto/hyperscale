@@ -415,6 +415,45 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
 .pkts li{display:flex;gap:8px;align-items:flex-start;font-size:13px}
 .pkts li .dot{margin-top:5px}
 .pkts small{display:block;color:var(--dim);font-size:12px}
+/* ----- Notes de cours (Markdown du vault) ----- */
+.flist{position:sticky;top:0;align-self:start}
+.ctoc{padding:9px 12px;border-radius:12px;background:#ecfdf3;border:2px solid #b7ebcd;font-size:13.5px;line-height:1.6}
+.ctoc a{color:#0f7a43;font-weight:700}
+.cours{display:flex;flex-direction:column;gap:9px;padding-top:14px;margin-top:6px;border-top:3px solid #b7ebcd;scroll-margin-top:8px;min-width:0}
+.cours h3{font-size:20px}
+.cours h4{margin:10px 0 0;font-family:var(--f-display);font-size:17px;font-weight:900}
+.cours h5{margin:6px 0 0;font-size:15px;font-weight:900}
+.cours h6{margin:4px 0 0;font-size:13.5px;font-weight:900;color:var(--dim)}
+.cours p,.cours ul,.cours ol{margin:0;max-width:76ch;line-height:1.5}
+.cours ul,.cours ol{padding-left:22px}
+.cours li+li{margin-top:3px}
+.cours .tw{overflow-x:auto}
+.cours table{border-collapse:collapse;font-size:13px;width:100%}
+.cours th,.cours td{border-bottom:1px solid var(--panel-3);padding:5px 7px;text-align:left;vertical-align:top}
+.cours th{color:var(--dim);font-weight:800;background:var(--panel-2)}
+.cours img{max-width:100%;height:auto;border-radius:6px;background:#fff}
+.cours pre.cb{margin:0;padding:10px 12px;border-radius:10px;background:#1c2a3a;color:#d6f5e3;font:12.5px/1.45 var(--f-mono);overflow-x:auto;white-space:pre}
+.cours code{background:var(--panel-3);padding:1px 5px;border-radius:5px}
+.cours mark{background:#fff1a8;padding:0 2px}
+.cours .wl{color:#5b4bd6;font-weight:700}
+.cours hr{border:0;border-top:2px dashed var(--edge);margin:4px 0;width:100%}
+.cours blockquote{margin:0;padding:6px 12px;border-left:4px solid var(--edge);color:var(--dim)}
+.co{display:block;border-radius:12px;padding:9px 12px;border:2px solid}
+.co>*+*{margin-top:6px}
+.co .cot,.co summary{font-weight:800}
+.co summary{cursor:pointer}
+.co-blue{background:#eef5ff;border-color:#c6dcfb}
+.co-green{background:#ecfdf3;border-color:#b7ebcd}
+.co-gold{background:#fff7e0;border-color:#ffe08a}
+.co-orange{background:#fff4e8;border-color:#ffc999}
+.co-red{background:#fff1f1;border-color:#ffc9cb}
+.co-violet{background:#f4f0ff;border-color:#d9ccff}
+.co-grey{background:var(--panel-2);border-color:var(--edge)}
+.co .co{background:var(--panel)}
+.mmd{padding:10px;border-radius:10px;background:#fff;border:2px solid var(--panel-3);overflow-x:auto;text-align:center}
+.mmd:not([data-processed]){white-space:pre;text-align:left;font:12px/1.4 var(--f-mono);color:var(--dim)}
+.mmd.off::before{content:'Schéma : il s’affiche avec une connexion Internet, ou dans Obsidian.';display:block;font:700 12px var(--f-body);color:var(--warn);margin-bottom:6px;white-space:normal}
+.mmd svg{max-width:100%;height:auto}
 </style>
 
 <div id="app">
@@ -497,4 +536,6 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
 <script src="dc/console.js"></script>
 <script src="dc/view.js"></script>
 <script src="dc/room.js"></script>
+<script src="dc/cours.js"></script>
+<script src="dc/md.js"></script>
 <script src="dc/ui.js"></script>

@@ -1,10 +1,10 @@
 'use strict';
 /* =========================================================
-   Hyperscale — fiches de cours, quiz et incidents
+   Hyperscale — fiches de cours et incidents
    Contenu tiré du vault « cours-sisr-main », complété.
    ========================================================= */
 const FICHES = [
-  { id: 'baie', title: 'La baie et ses unités', vault: 'Architecture réseau · Bases', html: `
+  { id: 'baie', title: 'La baie et ses unités', html: `
 <p>Une baie standard mesure <b>19 pouces</b> de large et <b>42U</b> de haut. Une unité (<b>1U</b>) vaut 44,45 mm. Un serveur fin occupe 1U, une baie de stockage 2U.</p>
 <p>La <b>face avant</b> donne sur l'allée froide : c'est là que l'air frais entre, et là qu'on change les disques à chaud. La <b>face arrière</b> donne sur l'allée chaude : on y trouve les ports, les alimentations et les PDU, donc tout le câblage.</p>
 <table><tr><th>Élément</th><th>Rôle</th></tr>
@@ -12,24 +12,16 @@ const FICHES = [
 <tr><td>Obturateur</td><td>Fermer une unité vide pour que l'air chaud ne revienne pas devant</td></tr>
 <tr><td>Guide-câbles</td><td>Ranger les cordons, garder l'accès aux équipements</td></tr>
 <tr><td>Étiquettes</td><td>Nom d'hôte sur l'équipement, repère aux deux bouts de chaque câble</td></tr></table>`,
-    retenir: "19 pouces, 42U, 1U = 44,45 mm. Face avant = air froid et disques, face arrière = câbles et alimentations. Chaque unité vide reçoit un obturateur.",
-    quiz: [
-      { q: "Combien mesure une unité de baie (1U) ?", o: ['44,45 mm', '19 pouces', '10 cm', '1 pouce'], a: 0, e: "1U = 1,75 pouce = 44,45 mm. 19 pouces, c'est la largeur." },
-      { q: "À quoi sert un obturateur ?", o: ["Empêcher l'air chaud de revenir en face avant", 'Bloquer les câbles', "Protéger d'un vol", 'Isoler un VLAN'], a: 0, e: "Une unité ouverte laisse l'air chaud de l'arrière recirculer vers l'avant, donc vers l'entrée d'air des serveurs." },
-      { q: "Où branche-t-on les cordons réseau dans une salle avec allées chaude et froide ?", o: ["Côté allée chaude, à l'arrière", "Côté allée froide, à l'avant", 'Sous le faux plancher uniquement', "Sur le toit de la baie"], a: 0, e: "Les ports et les alimentations sont à l'arrière des serveurs, côté allée chaude." }] },
-  { id: 'elec', title: 'Alimentation : PSU, PDU, voies A et B', vault: 'Architectures réseau (redondance)', html: `
+    retenir: "19 pouces, 42U, 1U = 44,45 mm. Face avant = air froid et disques, face arrière = câbles et alimentations. Chaque unité vide reçoit un obturateur." },
+  { id: 'elec', title: 'Alimentation : PSU, PDU, voies A et B', html: `
 <p>Chaque équipement sérieux a <b>deux blocs d'alimentation</b> (PSU). Chaque baie a <b>deux PDU</b> : le PDU A est relié à la voie A du bâtiment, le PDU B à la voie B, chacune avec son propre onduleur.</p>
 <p>La règle : <b>PSU1 sur A, PSU2 sur B</b>. Si une voie tombe, l'autre prend tout.</p>
 <p>Puissance : <b>P = U × I</b>. Un PDU de 16 A sous 230 V supporte <b>3 680 W</b>. Au-delà, son disjoncteur saute.</p>
 <table><tr><th>Charge par PDU</th><th>Conséquence si l'autre voie tombe</th></tr>
 <tr><td>Moins de 50 %</td><td>Le PDU restant absorbe tout : aucune coupure</td></tr>
 <tr><td>Plus de 50 %</td><td>Le PDU restant dépasse 100 % et disjoncte : toute la baie s'éteint</td></tr></table>`,
-    retenir: "Deux PSU sur deux voies (A et B). P = U × I : 16 A × 230 V = 3 680 W. Chaque PDU reste sous 50 % pour pouvoir porter seul la baie.",
-    quiz: [
-      { q: "Un serveur a ses deux PSU branchées sur le PDU A. La voie A tombe. Que se passe-t-il ?", o: ["Il s'éteint", 'Il bascule sur B', 'Rien, il a deux PSU', 'Il passe sur batterie interne'], a: 0, e: "Deux PSU ne servent à rien si elles dépendent de la même voie." },
-      { q: "Quelle puissance supporte un PDU 16 A en 230 V ?", o: ['3 680 W', '1 600 W', '230 W', '16 kW'], a: 0, e: "P = U × I = 230 × 16 = 3 680 W." },
-      { q: "Pourquoi garder chaque PDU sous 50 % de charge ?", o: ["Pour qu'il puisse reprendre la charge de l'autre en cas de panne", "Pour économiser de l'électricité", 'Parce que le câble chauffe', 'Pour la garantie'], a: 0, e: "En redondance N+N, chaque côté doit pouvoir porter 100 % de la baie." }] },
-  { id: 'cuivre', title: 'Câblage cuivre', vault: 'Câblage fibre SFP et PoE', html: `
+    retenir: "Deux PSU sur deux voies (A et B). P = U × I : 16 A × 230 V = 3 680 W. Chaque PDU reste sous 50 % pour pouvoir porter seul la baie." },
+  { id: 'cuivre', title: 'Câblage cuivre', html: `
 <table><tr><th>Catégorie</th><th>Débit</th><th>Distance</th><th>Usage</th></tr>
 <tr><td>Cat 5e</td><td>1 Gbit/s</td><td>100 m</td><td>Anciens sites</td></tr>
 <tr><td>Cat 6</td><td>1 Gbit/s, 10 Gbit/s jusqu'à 55 m</td><td>100 m</td><td>Postes, BMC</td></tr>
@@ -37,12 +29,8 @@ const FICHES = [
 <tr><td>Cat 8</td><td>25 à 40 Gbit/s</td><td>30 m</td><td>Baie à baie</td></tr></table>
 <p><b>Règle des 100 m</b> : 90 m de câble fixe et 10 m de cordons. Les normes T568A et T568B se valent, la seule règle est d'utiliser la même partout. Grâce à l'<b>Auto-MDIX</b>, droit ou croisé n'a plus d'importance.</p>
 <p>Dans une baie, on utilise aussi le <b>DAC</b> : un câble cuivre avec des modules SFP+ intégrés, très bon marché, limité à quelques mètres.</p>`,
-    retenir: "Cat 6A pour le 10 Gbit/s cuivre, 100 m maximum cordons compris. DAC pour quelques mètres entre cages SFP+.",
-    quiz: [
-      { q: "Quel câble pour du 10 Gbit/s cuivre sur 80 m ?", o: ['Cat 6A', 'Cat 6', 'Cat 5e', 'DAC'], a: 0, e: "La Cat 6 ne tient le 10 Gbit/s que jusqu'à 55 m." },
-      { q: "Quelle est la longueur maximale d'un lien cuivre, cordons compris ?", o: ['100 m', '55 m', '300 m', '10 m'], a: 0, e: "90 m de câble fixe et 10 m de cordons." },
-      { q: "Un DAC de 5 m doit relier deux baies distantes de 8 m. Que faire ?", o: ['Passer en fibre OM4 avec des modules SR', 'Mettre deux DAC bout à bout', 'Utiliser un DAC quand même', 'Passer en Cat 5e'], a: 0, e: "Un DAC est limité à quelques mètres. La fibre multimode convient dans le bâtiment." }] },
-  { id: 'fibre', title: 'Fibre optique et modules', vault: 'Câblage fibre SFP et PoE', html: `
+    retenir: "Cat 6A pour le 10 Gbit/s cuivre, 100 m maximum cordons compris. DAC pour quelques mètres entre cages SFP+." },
+  { id: 'fibre', title: 'Fibre optique et modules', html: `
 <table><tr><th>Fibre</th><th>Gaine</th><th>10 Gbit/s</th><th>Usage</th></tr>
 <tr><td>OM3 / OM4 multimode</td><td>Turquoise</td><td>300 / 400 m</td><td>Dans le bâtiment, la salle</td></tr>
 <tr><td>OS2 monomode</td><td>Jaune</td><td>10 km et plus</td><td>Entre bâtiments, opérateurs</td></tr></table>
@@ -52,12 +40,8 @@ const FICHES = [
 <tr><td>QSFP+ SR4 / LR4</td><td>40 Gbit/s</td><td>Multimode / monomode</td></tr></table>
 <p><b>Les 3 erreurs classiques</b> : deux modules différents sur un même lien (SR d'un côté, LR de l'autre) ; un module LR sur de la multimode ; émission et réception inversées. Vérifier avec <code>show interfaces transceiver</code> : une puissance reçue vers −40 dBm veut dire « plus de lumière ».</p>
 <p>Ne regarde jamais l'extrémité d'une fibre active : le laser est invisible et dangereux pour l'œil.</p>`,
-    retenir: "Multimode OM4 (turquoise) dans la salle avec des modules SR. Monomode OS2 (jaune) vers les opérateurs avec des modules LR. Même module aux deux bouts.",
-    quiz: [
-      { q: "Quelle fibre et quels modules pour relier l'opérateur, à 3 km ?", o: ['OS2 monomode et modules LR', 'OM4 et modules SR', 'Cat 6A', 'DAC 40G'], a: 0, e: "Au-delà de quelques centaines de mètres, il faut du monomode et des modules LR." },
-      { q: "Un lien fibre neuf ne monte pas, les modules sont bons. Que tenter ?", o: ['Inverser TX et RX sur un bout', 'Changer de VLAN', 'Redémarrer le serveur', 'Passer le port en trunk'], a: 0, e: "En duplex, l'émission d'un côté doit arriver sur la réception de l'autre." },
-      { q: "show interfaces transceiver affiche Rx −40 dBm. Qu'en conclure ?", o: ["Aucune lumière ne revient : module, fibre ou module d'en face", 'Le lien est parfait', 'Le VLAN est faux', 'Le port est en shutdown'], a: 0, e: "Une réception normale se situe autour de −1 à −7 dBm." }] },
-  { id: 'switch', title: 'Switch, VLAN et 802.1Q', vault: "Fonctionnement d'un switch · Cisco - VLAN STP VTP", html: `
+    retenir: "Multimode OM4 (turquoise) dans la salle avec des modules SR. Monomode OS2 (jaune) vers les opérateurs avec des modules LR. Même module aux deux bouts." },
+  { id: 'switch', title: 'Switch, VLAN et 802.1Q', html: `
 <p>Un switch apprend les <b>adresses MAC</b> source et transmet chaque trame vers le bon port. S'il ne connaît pas la destination, il <b>inonde</b> le VLAN.</p>
 <p>Un <b>VLAN</b> découpe un switch en plusieurs réseaux isolés : chaque VLAN est un domaine de broadcast.</p>
 <table><tr><th>Mode du port</th><th>Ce qu'il transporte</th><th>Usage</th></tr>
@@ -65,12 +49,8 @@ const FICHES = [
 <tr><td>trunk</td><td>Plusieurs VLAN, étiquetés 802.1Q</td><td>Switch vers switch, switch vers pare-feu, switch vers hyperviseur</td></tr></table>
 <p>Sur un trunk, chaque trame reçoit 4 octets dont le <b>VID</b> sur 12 bits : 4 094 VLAN possibles. Le <b>VLAN natif</b> passe sans étiquette et doit être identique des deux côtés. On n'utilise jamais le VLAN 1.</p>
 <p>Un VLAN doit être <b>autorisé sur chaque trunk</b> du chemin, de la VM jusqu'au pare-feu.</p>`,
-    retenir: "Access = un VLAN. Trunk = plusieurs VLAN étiquetés. Le VLAN doit être autorisé sur tous les trunks du chemin. VLAN natif identique des deux côtés, jamais le VLAN 1.",
-    quiz: [
-      { q: "Un hyperviseur héberge des VM en DMZ et en SERVEURS. Comment configurer son port de switch ?", o: ['En trunk avec les VLAN 10 et 20', 'En access VLAN 10', 'En access VLAN 1', 'En shutdown'], a: 0, e: "Un port access ne transporte qu'un VLAN. Le vault le dit : le port physique de l'hyperviseur passe en trunk." },
-      { q: "show interfaces trunk n'affiche que le VLAN 10. Le VLAN 20 ne passe pas. Pourquoi ?", o: ["Le VLAN 20 n'est pas autorisé sur le trunk", 'Le câble est abîmé', "L'IP est fausse", 'Le pare-feu bloque'], a: 0, e: "switchport trunk allowed vlan doit lister chaque VLAN utile." },
-      { q: "Combien de VLAN permet le champ VID ?", o: ['4 094', '256', '1 024', '16 millions'], a: 0, e: "12 bits = 4 096 valeurs, moins 0 et 4 095. 16 millions, c'est le VXLAN." }] },
-  { id: 'ip', title: "Plan d'adressage IPv4", vault: 'Adressage IPv4 et sous-réseaux · Aide-mémoire', html: `
+    retenir: "Access = un VLAN. Trunk = plusieurs VLAN étiquetés. Le VLAN doit être autorisé sur tous les trunks du chemin. VLAN natif identique des deux côtés, jamais le VLAN 1." },
+  { id: 'ip', title: "Plan d'adressage IPv4", html: `
 <p>Chaque VLAN routé reçoit un réseau. Ici, tous sont en <b>/24</b> : masque 255.255.255.0, 254 adresses utilisables.</p>
 <table><tr><th>VLAN</th><th>Réseau</th><th>Passerelle</th></tr>
 <tr><td>10 DMZ</td><td>172.16.10.0/24</td><td>172.16.10.1</td></tr>
@@ -79,12 +59,8 @@ const FICHES = [
 <tr><td>99 ADMIN</td><td>10.99.0.0/24</td><td>10.99.0.1</td></tr></table>
 <p>Dans un /24, la première adresse (.0) est le <b>réseau</b>, la dernière (.255) le <b>broadcast</b>. On réserve .1 à la passerelle. Bloc = 256 − octet du masque.</p>
 <p>Plages privées : <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>.</p>`,
-    retenir: "Une VM prend une IP du réseau de son VLAN. .0 = réseau, .255 = broadcast, .1 = passerelle. /24 = 254 hôtes.",
-    quiz: [
-      { q: "Une VM du VLAN 10 a l'adresse 10.20.0.15. Que se passe-t-il ?", o: ["Elle ne joint pas sa passerelle : l'IP n'est pas dans son réseau", 'Tout fonctionne', 'Elle passe dans le VLAN 20', 'Le pare-feu corrige'], a: 0, e: "L'adresse doit appartenir au réseau du VLAN : 172.16.10.0/24." },
-      { q: "Combien d'hôtes dans un /26 ?", o: ['62', '64', '126', '30'], a: 0, e: "Bloc de 64, moins le réseau et le broadcast." },
-      { q: "Quelle plage est privée ?", o: ['172.16.0.0/12', '8.8.8.0/24', '203.0.113.0/24', '1.1.1.0/24'], a: 0, e: "10/8, 172.16/12 et 192.168/16 sont les trois plages privées." }] },
-  { id: 'pf', title: 'Pare-feu, DMZ et matrice de flux', vault: 'Pare-feu et DMZ', html: `
+    retenir: "Une VM prend une IP du réseau de son VLAN. .0 = réseau, .255 = broadcast, .1 = passerelle. /24 = 254 hôtes." },
+  { id: 'pf', title: 'Pare-feu, DMZ et matrice de flux', html: `
 <p>Le pare-feu <b>avec état</b> se souvient des connexions : on autorise la requête, la réponse revient toute seule.</p>
 <p>La <b>DMZ</b> héberge ce qui est exposé à Internet. Si un serveur de la DMZ est compromis, l'attaquant n'est pas dans le réseau interne.</p>
 <p>Avant d'écrire une règle, on remplit la <b>matrice de flux</b> : qui parle à qui, sur quel port.</p>
@@ -94,12 +70,8 @@ const FICHES = [
 <tr><td>Internet → SERVEURS</td><td>Interdit</td></tr>
 <tr><td>ADMIN → tout</td><td>SSH, SNMP, depuis le réseau d'administration seulement</td></tr></table>
 <p>Principe : <b>tout est interdit, sauf ce qui est explicitement autorisé</b>, y compris en sortie. Équivalent nftables : <code>policy drop;</code> puis une règle <code>accept</code> par flux.</p>`,
-    retenir: "Stateful = se souvient des connexions. La DMZ isole ce qui est exposé. La matrice de flux avant les règles. Tout est interdit sauf exception.",
-    quiz: [
-      { q: "Un serveur web exposé doit-il être dans la zone SERVEURS ?", o: ['Non, en DMZ', 'Oui', 'Dans ADMIN', 'Dans STOCKAGE'], a: 0, e: "Ce qui est joignable depuis Internet va en DMZ." },
-      { q: "Le web en DMZ doit lire la base en SERVEURS. Quelle règle ?", o: ['DMZ → SERVEURS TCP 5432 uniquement', 'DMZ → SERVEURS tout', 'Internet → SERVEURS 5432', 'Mettre la base en DMZ'], a: 0, e: "Uniquement le flux nécessaire, sur le seul port nécessaire." },
-      { q: "Pourquoi un pare-feu avec état simplifie-t-il les règles ?", o: ['La réponse est autorisée automatiquement', 'Il ne filtre rien', 'Il chiffre le trafic', 'Il remplace le switch'], a: 0, e: "Il suit la connexion : pas besoin d'ouvrir les ports dynamiques au retour." }] },
-  { id: 'ports', title: 'TCP, UDP et ports à connaître', vault: 'TCP UDP et protocoles essentiels', html: `
+    retenir: "Stateful = se souvient des connexions. La DMZ isole ce qui est exposé. La matrice de flux avant les règles. Tout est interdit sauf exception." },
+  { id: 'ports', title: 'TCP, UDP et ports à connaître', html: `
 <p><b>TCP</b> établit une connexion (SYN, SYN-ACK, ACK) et garantit la livraison. <b>UDP</b> envoie sans connexion, plus vite.</p>
 <table><tr><th>Port</th><th>Service</th><th>Port</th><th>Service</th></tr>
 <tr><td>22 TCP</td><td>SSH, SFTP</td><td>443 TCP</td><td>HTTPS</td></tr>
@@ -108,12 +80,8 @@ const FICHES = [
 <tr><td>123 UDP</td><td>NTP</td><td>161, 162 UDP</td><td>SNMP</td></tr>
 <tr><td>514 UDP</td><td>Syslog</td><td>51820 UDP</td><td>WireGuard</td></tr></table>
 <p>Dans une capture, <b>SYN sans réponse</b> = filtré, <b>SYN puis RST</b> = la machine répond mais rien n'écoute sur ce port.</p>`,
-    retenir: "TCP = fiable avec handshake, UDP = rapide sans connexion. 22, 53, 123, 161, 443, 514, 5432 sont à connaître par cœur.",
-    quiz: [
-      { q: "Quel port ouvrir pour un DNS faisant autorité ?", o: ['53 en UDP et en TCP', '53 en UDP seulement', '853', '443'], a: 0, e: "Le DNS passe en UDP, et en TCP pour les grandes réponses et les transferts de zone." },
-      { q: "SYN puis RST dans Wireshark : que conclure ?", o: ["La machine répond mais aucun service n'écoute", 'Le pare-feu filtre', 'Le câble est coupé', 'Le DNS est faux'], a: 0, e: "Un filtrage donnerait plutôt un SYN sans réponse." },
-      { q: "Quel protocole utilise WireGuard ?", o: ['UDP 51820', 'TCP 443', 'UDP 500', 'TCP 1194'], a: 0, e: "UDP 500 et 4500, c'est IPsec (IKE et NAT-T)." }] },
-  { id: 'virtu', title: 'Virtualisation', vault: 'Virtualisation', html: `
+    retenir: "TCP = fiable avec handshake, UDP = rapide sans connexion. 22, 53, 123, 161, 443, 514, 5432 sont à connaître par cœur." },
+  { id: 'virtu', title: 'Virtualisation', html: `
 <p>Un <b>hyperviseur de type 1</b> (Proxmox, ESXi, Hyper-V, KVM) s'installe directement sur le serveur et fait tourner des machines virtuelles.</p>
 <table><tr><th>Ressource</th><th>Surallocation</th></tr>
 <tr><td>vCPU</td><td>Acceptable : les VM n'utilisent pas toutes leur processeur en même temps</td></tr>
@@ -122,12 +90,8 @@ const FICHES = [
 <p>Un <b>switch virtuel</b> (vmbr0) relie les VM ; chaque VM reçoit une étiquette de VLAN (<code>tag=10</code>). Le port physique de l'hyperviseur passe donc en <b>trunk</b>.</p>
 <p>Un <b>snapshot n'est pas une sauvegarde</b> : il vit sur le même stockage que la VM.</p>
 <p>Anti-affinité : deux VM qui se secourent ne doivent jamais être sur le même hôte.</p>`,
-    retenir: "Type 1 sur le matériel. vCPU surallouables, RAM non. Port de l'hyperviseur en trunk. Snapshot ≠ sauvegarde. Anti-affinité pour la haute disponibilité.",
-    quiz: [
-      { q: "Quelle ressource ne faut-il pas surallouer ?", o: ['La RAM', 'Les vCPU', 'Les ports réseau', 'Les VLAN'], a: 0, e: "Quand la mémoire manque, le noyau tue des processus (OOM killer)." },
-      { q: "Deux serveurs web d'un même site sont sur le même hôte. Quel risque ?", o: ["Une panne de l'hôte coupe les deux", 'Aucun', 'Un conflit IP', 'Le VLAN sature'], a: 0, e: "C'est le rôle de l'anti-affinité." },
-      { q: "Un snapshot protège-t-il d'une panne de disque ?", o: ['Non, il est sur le même stockage', 'Oui', 'Seulement en RAID 0', 'Seulement la nuit'], a: 0, e: "Snapshot = retour arrière rapide, pas une copie indépendante." }] },
-  { id: 'raid', title: 'RAID', vault: 'Linux - RAID', html: `
+    retenir: "Type 1 sur le matériel. vCPU surallouables, RAM non. Port de l'hyperviseur en trunk. Snapshot ≠ sauvegarde. Anti-affinité pour la haute disponibilité." },
+  { id: 'raid', title: 'RAID', html: `
 <table><tr><th>RAID</th><th>Disques min.</th><th>Capacité utile</th><th>Tolérance</th></tr>
 <tr><td>0</td><td>2</td><td>100 %</td><td>aucune</td></tr>
 <tr><td>1</td><td>2</td><td>50 %</td><td>1 disque</td></tr>
@@ -137,12 +101,8 @@ const FICHES = [
 <p>Exemple : 4 disques de 8 To en RAID 5 = 3 × 8 = <b>24 To</b> utiles. En RAID 6 = 16 To.</p>
 <p>Pendant la <b>reconstruction</b>, la grappe n'a plus de marge. Avec de gros disques lents, elle dure longtemps : c'est pour ça qu'on préfère le RAID 6 pour les gros HDD et le RAID 10 pour les bases de données.</p>
 <p><b>RAID ≠ sauvegarde</b> : il protège d'une panne de disque, pas d'une suppression, d'un rançongiciel ou d'un incendie. Suivi : <code>cat /proc/mdstat</code> affiche [UU] quand tout va bien, [U_] quand un disque manque.</p>`,
-    retenir: "0 = vitesse, 1 = miroir, 5 = compromis, 6 = deux pannes, 10 = vitesse et sûreté. RAID ≠ sauvegarde.",
-    quiz: [
-      { q: "6 disques de 2 To en RAID 6 : capacité utile ?", o: ['8 To', '10 To', '12 To', '6 To'], a: 0, e: "(N − 2) × taille = 4 × 2 To." },
-      { q: "cat /proc/mdstat affiche [UU_U]. Qu'est-ce que ça signifie ?", o: ['Un disque manque, la grappe est dégradée', 'Tout va bien', 'La grappe est en RAID 0', 'Le disque 3 est un spare'], a: 0, e: "Chaque U est un disque actif, chaque _ un disque absent ou en panne." },
-      { q: "Un RAID 1 protège-t-il d'une suppression accidentelle ?", o: ['Non, la suppression est copiée sur le miroir', 'Oui', 'Seulement avec un spare', 'Oui en RAID 10'], a: 0, e: "Le miroir reproduit tout, y compris les erreurs." }] },
-  { id: 'bak', title: 'Sauvegardes 3-2-1', vault: 'Sauvegardes', html: `
+    retenir: "0 = vitesse, 1 = miroir, 5 = compromis, 6 = deux pannes, 10 = vitesse et sûreté. RAID ≠ sauvegarde." },
+  { id: 'bak', title: 'Sauvegardes 3-2-1', html: `
 <p><b>Règle 3-2-1</b> : 3 copies des données, sur 2 supports différents, dont 1 hors site (et idéalement une hors ligne contre les rançongiciels).</p>
 <table><tr><th>Type</th><th>Copie</th></tr>
 <tr><td>Complète</td><td>Tout, à chaque fois : simple mais lourde</td></tr>
@@ -150,12 +110,8 @@ const FICHES = [
 <tr><td>Incrémentale</td><td>Ce qui a changé depuis la dernière sauvegarde</td></tr></table>
 <p><b>RPO</b> : combien de données peut-on perdre ? Une sauvegarde par nuit = RPO de 24 h. <b>RTO</b> : en combien de temps doit-on repartir ?</p>
 <p>Une sauvegarde jamais restaurée n'existe pas : on teste les restaurations.</p>`,
-    retenir: "3 copies, 2 supports, 1 hors site. RPO = perte acceptable, RTO = délai de reprise. Tester les restaurations. RAID ≠ sauvegarde.",
-    quiz: [
-      { q: "Une sauvegarde par nuit à 2 h. Quel RPO ?", o: ['24 h', '2 h', '0', '1 semaine'], a: 0, e: "Au pire, on perd une journée de données." },
-      { q: "L'incrémentale copie ce qui a changé depuis…", o: ['la dernière sauvegarde, quelle qu’elle soit', 'la dernière complète', 'le début', 'hier midi'], a: 0, e: "La différentielle, elle, repart de la dernière complète." },
-      { q: "Pourquoi une copie hors ligne ?", o: ['Un rançongiciel ne peut pas la chiffrer', 'Elle est plus rapide', 'Elle évite le RAID', 'Elle est gratuite'], a: 0, e: "Ce qui est joignable par le réseau peut être chiffré par l'attaquant." }] },
-  { id: 'sup', title: 'Supervision : SNMP, Syslog, NTP', vault: 'Supervision SNMP Syslog NTP', html: `
+    retenir: "3 copies, 2 supports, 1 hors site. RPO = perte acceptable, RTO = délai de reprise. Tester les restaurations. RAID ≠ sauvegarde." },
+  { id: 'sup', title: 'Supervision : SNMP, Syslog, NTP', html: `
 <p>Objectif : être prévenu d'une panne <b>avant les utilisateurs</b>.</p>
 <table><tr><th>Outil</th><th>Répond à</th><th>Port</th></tr>
 <tr><td>SNMP</td><td>L'équipement va-t-il bien ? Le lien est-il saturé ?</td><td>UDP 161, traps 162</td></tr>
@@ -164,12 +120,8 @@ const FICHES = [
 <tr><td>NTP</td><td>Une heure commune pour relier les journaux</td><td>UDP 123</td></tr></table>
 <p>Gravités Syslog : 0 Emergency, 1 Alert, 2 Critical, 3 Error, 4 Warning, 5 Notification, 6 Informational, 7 Debugging. Mnémo : <i>Every Awesome Cisco Engineer Will Need Ice cream Daily</i>.</p>
 <p>Les pannes matérielles (PSU, disque, température) remontent par le <b>BMC</b> (iDRAC, IPMI) : son port doit être câblé dans le VLAN d'administration. On utilise <b>SNMPv3 authPriv</b>.</p>`,
-    retenir: "NTP d'abord. SNMPv3 authPriv sur UDP 161/162. Syslog UDP 514, de 0 (grave) à 7. Le BMC câblé dans l'ADMIN pour voir le matériel.",
-    quiz: [
-      { q: "%LINK-3-UPDOWN : quelle gravité ?", o: ['3, Error', '5, Notification', '1, Alert', '7, Debugging'], a: 0, e: "Le chiffre entre les tirets donne la gravité." },
-      { q: "Pourquoi configurer NTP avant Syslog ?", o: ['Pour corréler les journaux de plusieurs équipements', 'Pour chiffrer', 'Pour aller plus vite', 'Pour le DNS'], a: 0, e: "Sans heure commune, impossible de reconstituer une chronologie." },
-      { q: "Comment la supervision voit-elle une alimentation en panne sur un serveur ?", o: ['Par le BMC (IPMI), câblé dans le VLAN ADMIN', 'Par le DNS', 'Par le client', 'Par le VLAN natif'], a: 0, e: "Le contrôleur de gestion du serveur surveille capteurs, PSU et disques." }] },
-  { id: 'dep', title: 'Méthode de dépannage', vault: 'Méthode de dépannage réseau', html: `
+    retenir: "NTP d'abord. SNMPv3 authPriv sur UDP 161/162. Syslog UDP 514, de 0 (grave) à 7. Le BMC câblé dans l'ADMIN pour voir le matériel." },
+  { id: 'dep', title: 'Méthode de dépannage', html: `
 <p>Ne pas modifier au hasard : <b>observer, supposer, tester, documenter</b>.</p>
 <ol><li><b>Définir</b> le problème : qui, quoi, depuis quand ? Qu'est-ce qui a changé ?</li>
 <li><b>Collecter</b> : commandes show, journaux, supervision.</li>
@@ -185,12 +137,8 @@ const FICHES = [
 <tr><td>CRC, input errors</td><td>Câble ou connecteur abîmé</td></tr>
 <tr><td>late collision</td><td>Duplex différent de chaque côté</td></tr>
 <tr><td>output drops</td><td>Interface saturée</td></tr></table>`,
-    retenir: "Définir, collecter, supposer, tester un seul changement, documenter. De bas en haut : énergie, câble, VLAN, IP, règles, service. CRC = câble, late collision = duplex.",
-    quiz: [
-      { q: "Beaucoup de late collisions sur un port. Cause probable ?", o: ['Duplex différent de chaque côté', 'Câble abîmé', 'Mauvais VLAN', 'Certificat expiré'], a: 0, e: "Un côté en full, l'autre retombé en half duplex." },
-      { q: "ping 8.8.8.8 répond mais pas ping google.com. Couche en cause ?", o: ['Application : le DNS', 'Physique', 'Liaison', 'Transport'], a: 0, e: "Le réseau fonctionne, c'est la résolution de noms qui échoue." },
-      { q: "Quelle est la première étape ?", o: ['Définir le problème : qui, quoi, depuis quand', 'Redémarrer', 'Changer le câble', 'Appeler le fournisseur'], a: 0, e: "On ne corrige bien que ce qu'on a compris." }] },
-  { id: 'l2sec', title: 'Sécurité de niveau 2', vault: 'Sécurité de niveau 2', html: `
+    retenir: "Définir, collecter, supposer, tester un seul changement, documenter. De bas en haut : énergie, câble, VLAN, IP, règles, service. CRC = câble, late collision = duplex." },
+  { id: 'l2sec', title: 'Sécurité de niveau 2', html: `
 <table><tr><th>Attaque</th><th>Protection</th></tr>
 <tr><td>Switch pirate, prise de rôle STP</td><td>BPDU Guard sur les ports d'accès</td></tr>
 <tr><td>MAC flooding</td><td>Port Security</td></tr>
@@ -199,12 +147,8 @@ const FICHES = [
 <tr><td>Tempête de broadcast</td><td>Storm Control</td></tr></table>
 <p>Un port protégé par BPDU Guard passe en <b>err-disabled</b> dès qu'un BPDU arrive. Pour le relancer : retirer la cause, puis <code>shutdown</code> et <code>no shutdown</code>.</p>
 <p>Les <b>ports inutilisés</b> sont coupés (<code>shutdown</code>) et placés dans un VLAN poubelle.</p>`,
-    retenir: "BPDU Guard et PortFast sur les ports d'accès. Ports inutilisés en shutdown. err-disabled : enlever la cause, puis shutdown / no shutdown.",
-    quiz: [
-      { q: "Un port passe en err-disabled juste après le branchement d'un petit switch. Quelle fonction a réagi ?", o: ['BPDU Guard', 'Port Security', 'DHCP Snooping', 'NTP'], a: 0, e: "Le petit switch envoie des BPDU Spanning Tree." },
-      { q: "Comment relancer un port err-disabled ?", o: ['Retirer la cause, puis shutdown et no shutdown', 'Redémarrer le serveur', 'Changer de VLAN', 'Attendre'], a: 0, e: "Sans retirer la cause, le port retombe aussitôt." },
-      { q: "Que faire des ports inutilisés ?", o: ['Les couper et les mettre dans un VLAN poubelle', 'Les laisser en VLAN 1', 'Les passer en trunk', 'Les mettre en DMZ'], a: 0, e: "Un port actif dans le VLAN 1 est une porte ouverte." }] },
-  { id: 'acl', title: 'ACL : filtrer sur le routeur', vault: 'Cisco - ACL NAT Sécurité', html: `
+    retenir: "BPDU Guard et PortFast sur les ports d'accès. Ports inutilisés en shutdown. err-disabled : enlever la cause, puis shutdown / no shutdown." },
+  { id: 'acl', title: 'ACL : filtrer sur le routeur', html: `
 <p>Une <b>ACL</b> (liste de contrôle d'accès) est une liste de lignes <code>permit</code> (autoriser) ou <code>deny</code> (refuser) qu'un routeur applique aux paquets qui passent par une interface.</p>
 <table><tr><th></th><th>ACL standard</th><th>ACL étendue</th></tr>
 <tr><td>Numéros</td><td>1 à 99</td><td>100 à 199, ou un nom</td></tr>
@@ -224,14 +168,8 @@ interface Te0/0/0
 <p><b>ACL standard sur les lignes VTY.</b> Pour que seuls les administrateurs ouvrent une session sur le routeur : <code>access-list 10 permit 10.99.0.0 0.0.0.255</code>, puis <code>line vty 0 4</code>, <code>transport input ssh</code> (Telnet circule en clair) et <code>access-class 10 in</code>. Sur une ligne VTY, on applique l'ACL avec <code>access-class</code> ; sur une interface, avec <code>ip access-group</code>.</p>
 <p><b>Plusieurs ports d'un coup.</b> Après <code>eq</code>, IOS accepte jusqu'à 10 ports : <code>permit tcp any host 203.0.113.10 eq 443 22 25</code>.</p>
 <p>Vérifier : <code>show access-lists</code> affiche chaque ligne et son nombre de correspondances (matches).</p>`,
-    retenir: "Lue de haut en bas, la première ligne qui correspond décide, et un deny ip any any implicite termine toute ACL. Étendue (100-199 ou nommée) : protocole, source, destination, port, posée près de la source. Masque générique 0.0.0.255 pour un /24. Sur une interface : ip access-group NOM in ; sur les lignes VTY : access-class N in.",
-    quiz: [
-      { q: "Une ACL contient « permit tcp any any eq 443 » puis « deny ip 10.0.0.0 0.255.255.255 any ». Un paquet TCP 443 venant de 10.1.1.1 est…", o: ['Autorisé : la première ligne correspond', 'Refusé : la ligne deny est plus précise', 'Refusé par le deny implicite', 'Ignoré par le routeur'], a: 0, e: "Le routeur s'arrête à la première ligne qui correspond. Les deny anti-usurpation se placent donc en tête." },
-      { q: "Quel masque générique désigne le réseau 172.16.0.0/12 ?", o: ['0.15.255.255', '255.240.0.0', '0.0.255.255', '0.31.255.255'], a: 0, e: "/12 donne le masque 255.240.0.0 ; son inverse octet par octet est 0.15.255.255." },
-      { q: "Pour que seul le réseau 10.99.0.0/24 puisse ouvrir une session SSH sur le routeur, quelle commande pose l'ACL 10 sur les lignes VTY ?", o: ['access-class 10 in', 'ip access-group 10 in', 'access-list 10 in', 'transport input 10'], a: 0, e: "Sur line vty, c'est access-class. ip access-group sert sur une interface." },
-      { q: "Tu appliques en entrée, sur le lien opérateur, une ACL qui n'autorise que TCP 443. Que se passe-t-il ?", o: ["La session BGP (TCP 179) est refusée et Internet tombe", 'Rien : BGP passe toujours', 'Seul HTTPS est accéléré', 'Le pare-feu reprend BGP à sa place'], a: 0, e: "Le deny implicite refuse aussi le trafic de l'opérateur : il faut une ligne permit pour BGP." },
-    ] },
-  { id: 'froid', title: 'Refroidissement et PUE', vault: 'Bases de l’informatique (chaleur)', html: `
+    retenir: "Lue de haut en bas, la première ligne qui correspond décide, et un deny ip any any implicite termine toute ACL. Étendue (100-199 ou nommée) : protocole, source, destination, port, posée près de la source. Masque générique 0.0.0.255 pour un /24. Sur une interface : ip access-group NOM in ; sur les lignes VTY : access-class N in." },
+  { id: 'froid', title: 'Refroidissement et PUE', html: `
 <p>Presque toute l'électricité consommée par un serveur devient de la <b>chaleur</b>. L'air froid entre en face avant, ressort chaud à l'arrière.</p>
 <p>Recommandation ASHRAE : air d'entrée entre <b>18 et 27 °C</b>. Au-delà, les serveurs réduisent leur fréquence, puis s'arrêtent pour se protéger.</p>
 <table><tr><th>Mesure</th><th>Effet</th></tr>
@@ -240,12 +178,8 @@ interface Te0/0/0
 <tr><td>Confinement</td><td>L'air froid va là où il sert</td></tr>
 <tr><td>Clim en rangée</td><td>Le froid est produit au plus près de la chaleur</td></tr></table>
 <p><b>PUE</b> = énergie totale du site ÷ énergie des équipements informatiques. 2,0 = autant d'énergie pour refroidir que pour calculer. Les meilleurs sites sont vers 1,1 à 1,2.</p>`,
-    retenir: "Entrée d'air 18 à 27 °C. Obturateurs, allées et confinement. PUE = total ÷ informatique, plus il est proche de 1, mieux c'est.",
-    quiz: [
-      { q: "Un site consomme 500 kW, dont 400 kW pour l'informatique. PUE ?", o: ['1,25', '0,8', '1,5', '100'], a: 0, e: "500 ÷ 400 = 1,25." },
-      { q: "Quelle plage de température d'entrée recommande l'ASHRAE ?", o: ['18 à 27 °C', '5 à 15 °C', '30 à 40 °C', '0 à 10 °C'], a: 0, e: "Au-dessus, on gaspille la durée de vie et on risque l'arrêt." },
-      { q: "Le moyen le moins cher de baisser la température d'entrée ?", o: ['Poser des obturateurs sur les unités vides', 'Acheter un serveur', 'Passer en fibre', 'Couper le pare-feu'], a: 0, e: "Quelques euros par unité, et l'air chaud ne revient plus." }] },
-  { id: 'archi', title: 'Redondance et spine-leaf', vault: 'Architectures réseau · EtherChannel et LACP', html: `
+    retenir: "Entrée d'air 18 à 27 °C. Obturateurs, allées et confinement. PUE = total ÷ informatique, plus il est proche de 1, mieux c'est." },
+  { id: 'archi', title: 'Redondance et spine-leaf', html: `
 <p>Règle d'or : <b>aucun point unique de panne</b>.</p>
 <table><tr><th>À sécuriser</th><th>Solution</th></tr>
 <tr><td>Alimentation</td><td>Deux PSU, voies A et B</td></tr>
@@ -255,21 +189,13 @@ interface Te0/0/0
 <tr><td>Accès Internet</td><td>Deux opérateurs et BGP</td></tr></table>
 <p>Dans un datacenter, le trafic va surtout de serveur à serveur. Le modèle <b>spine-leaf</b> relie chaque leaf (switch de baie, « top of rack ») à chaque spine : deux serveurs sont toujours à deux sauts.</p>
 <p>Une redondance non testée n'existe pas : on simule la panne.</p>`,
-    retenir: "Pas de point unique de panne. Spine-leaf dans le datacenter : chaque leaf relié à chaque spine. Deux opérateurs avec BGP. Tester les bascules.",
-    quiz: [
-      { q: "Dans un spine-leaf, à quoi est relié chaque leaf ?", o: ['À chaque spine', 'Aux autres leafs', 'À un seul spine', 'Directement à Internet'], a: 0, e: "Pas de lien entre leafs ni entre spines." },
-      { q: "Un switch d'accès n'a qu'une alimentation. Est-ce un point unique de panne ?", o: ['Oui', 'Non', 'Seulement en 10G', 'Seulement en trunk'], a: 0, e: "Sa PSU ou sa voie électrique tombe, tout ce qui en dépend tombe." },
-      { q: "Comment survivre à la coupure d'un opérateur ?", o: ['Un second opérateur et BGP', 'Un câble plus long', 'Un VLAN de plus', 'Un RAID 6'], a: 0, e: "BGP retire automatiquement les routes du lien tombé." }] },
-  { id: 'tls', title: 'Certificats TLS', vault: 'Cryptographie PKI et TLS', html: `
+    retenir: "Pas de point unique de panne. Spine-leaf dans le datacenter : chaque leaf relié à chaque spine. Deux opérateurs avec BGP. Tester les bascules." },
+  { id: 'tls', title: 'Certificats TLS', html: `
 <p>Un <b>certificat</b> lie un nom (<code>www.client.fr</code>) à une clé publique, signé par une <b>autorité de certification</b>. La clé privée ne quitte jamais le serveur.</p>
 <p>Il a une <b>date d'expiration</b>. Let's Encrypt délivre des certificats de 90 jours : on les renouvelle automatiquement avec ACME (certbot).</p>
 <p>Vérifier : <code>openssl s_client -connect site:443</code> puis <code>openssl x509 -noout -dates</code>. TLS 1.2 ou 1.3 uniquement.</p>`,
-    retenir: "Un certificat expire : renouvellement automatique ACME et surveillance de l'échéance. La clé privée reste sur le serveur.",
-    quiz: [
-      { q: "Le site affiche « certificat expiré ». Que faire durablement ?", o: ['Renouveler et activer le renouvellement automatique ACME', 'Désactiver HTTPS', 'Changer de VLAN', 'Redémarrer le switch'], a: 0, e: "Le renouvellement manuel finit toujours par être oublié." },
-      { q: "Que contient un certificat ?", o: ['Un nom et une clé publique signés par une CA', 'La clé privée', 'Le mot de passe admin', "L'adresse MAC"], a: 0, e: "La clé privée ne sort jamais du serveur." },
-      { q: "Quelle durée pour un certificat Let's Encrypt ?", o: ['90 jours', '10 ans', '1 jour', '5 ans'], a: 0, e: "Des durées courtes limitent l'impact d'une clé volée." }] },
-  { id: 'attaques', title: 'Attaques et défense', vault: 'Durcissement et recommandations ANSSI', html: `
+    retenir: "Un certificat expire : renouvellement automatique ACME et surveillance de l'échéance. La clé privée reste sur le serveur." },
+  { id: 'attaques', title: 'Attaques et défense', html: `
 <table><tr><th>Attaque</th><th>Signe</th><th>Défense</th></tr>
 <tr><td>Balayage de ports</td><td>Refus en série dans les journaux</td><td>Politique par défaut drop, lire les journaux</td></tr>
 <tr><td>Force brute SSH</td><td>« Failed password » en rafale</td><td>SSH seulement depuis l'ADMIN, clés, fail2ban</td></tr>
@@ -277,12 +203,8 @@ interface Te0/0/0
 <tr><td>SYN flood</td><td>Table de sessions pleine</td><td>Limiter les SYN, SYN cookies</td></tr>
 <tr><td>Rançongiciel</td><td>Fichiers renommés, demande de rançon</td><td>Isoler, restaurer, sauvegardes hors ligne</td></tr></table>
 <p>Recommandations ANSSI : moindre privilège, administration séparée, couper l'inutile, tout tracer, tout mettre à jour.</p>`,
-    retenir: "Fermer l'inutile, administrer depuis un réseau dédié, lire les journaux. DDoS volumétrique : on filtre chez l'opérateur. Rançongiciel : isoler, restaurer, ne pas payer.",
-    quiz: [
-      { q: "Le lien Internet est saturé par 25 Gbit/s d'attaque sur 10 Gbit/s. Que faire ?", o: ["Demander le filtrage à l'opérateur, en amont", 'Ajouter une règle sur le pare-feu', 'Redémarrer le routeur', 'Changer le VLAN'], a: 0, e: "Le tuyau est plein avant même d'atteindre ton pare-feu." },
-      { q: "Première action face à un rançongiciel ?", o: ['Isoler la machine du réseau', 'Payer', 'Éteindre la clim', 'Supprimer les sauvegardes'], a: 0, e: "On stoppe la propagation, puis on restaure." },
-      { q: "D'où administrer les serveurs en SSH ?", o: ["Uniquement depuis le réseau d'administration", "Depuis Internet", 'Depuis la DMZ', "Depuis n'importe où avec un bon mot de passe"], a: 0, e: "Administration séparée : principe de base de l'ANSSI." }] },
-  { id: 'salle', title: "Urbanisation d'une salle", vault: 'Architectures réseau (datacenter)', html: `
+    retenir: "Fermer l'inutile, administrer depuis un réseau dédié, lire les journaux. DDoS volumétrique : on filtre chez l'opérateur. Rançongiciel : isoler, restaurer, ne pas payer." },
+  { id: 'salle', title: "Urbanisation d'une salle", html: `
 <p>Une salle est organisée en <b>rangées</b> de baies. Deux rangées se font face par l'avant autour d'une <b>allée froide</b> ; elles se tournent le dos autour d'une <b>allée chaude</b>. On n'aspire ainsi jamais l'air rejeté par la rangée d'en face.</p>
 <table><tr><th>Espace</th><th>Rôle</th></tr>
 <tr><td>Allée froide</td><td>Face avant des baies, dalles perforées, air soufflé par les climatiseurs</td></tr>
@@ -291,12 +213,8 @@ interface Te0/0/0
 <tr><td>Chemins de câbles</td><td>En hauteur, au-dessus des rangées : cuivre et fibre séparés</td></tr>
 <tr><td>Local électrique</td><td>TGBT, onduleurs, batteries ; groupe électrogène à l'extérieur</td></tr></table>
 <p>Une baie se repère par sa rangée et sa position : <b>B04</b> = rangée B, quatrième baie. Un câble entre baies passe par le chemin de câbles : sa longueur suit les allées, pas la ligne droite.</p>`,
-    retenir: "Rangées face à face autour de l'allée froide, dos à dos autour de l'allée chaude. Les opérateurs arrivent en salle MMR. Les câbles entre baies passent en hauteur.",
-    quiz: [
-      { q: "De quel côté se trouve la face avant des baies ?", o: ["Du côté de l'allée froide", "Du côté de l'allée chaude", 'Contre le mur', 'Peu importe'], a: 0, e: "Les serveurs aspirent l'air par l'avant : l'avant doit donner sur l'air froid." },
-      { q: "Où arrivent les fibres des opérateurs ?", o: ['En salle opérateurs (MMR)', 'Directement dans chaque baie', 'Dans le local électrique', 'Sur le toit'], a: 0, e: "On les rejoint par un cross-connect, souvent en fibre monomode." },
-      { q: "Pourquoi deux rangées voisines se tournent-elles le dos ?", o: ["Pour que leurs sorties d'air chaud se rejoignent dans la même allée", 'Pour gagner de la place', 'Pour la sécurité', 'Pour les opérateurs'], a: 0, e: "C'est le principe des allées chaudes et froides." }] },
-  { id: 'onduleur', title: 'Onduleurs, batteries et groupe électrogène', vault: 'Architectures réseau (redondance)', html: `
+    retenir: "Rangées face à face autour de l'allée froide, dos à dos autour de l'allée chaude. Les opérateurs arrivent en salle MMR. Les câbles entre baies passent en hauteur." },
+  { id: 'onduleur', title: 'Onduleurs, batteries et groupe électrogène', html: `
 <p>La chaîne électrique d'un datacenter : <b>arrivée EDF → TGBT → onduleurs A et B → gaines à barres de chaque rangée → PDU des baies</b>.</p>
 <table><tr><th>Élément</th><th>Rôle</th></tr>
 <tr><td>TGBT</td><td>Tableau général basse tension : répartit l'arrivée du secteur</td></tr>
@@ -305,12 +223,8 @@ interface Te0/0/0
 <tr><td>Groupe électrogène</td><td>Moteur diesel qui démarre en quelques secondes et tient des heures</td></tr></table>
 <p>Un onduleur se dimensionne en <b>kVA</b> (puissance apparente) ; les serveurs consomment des <b>kW</b>. kW = kVA × facteur de puissance (environ 0,9).</p>
 <p>En redondance <b>2N</b>, deux chaînes complètes (A et B) alimentent chaque baie. Chacune doit pouvoir porter seule toute la salle : on garde chaque onduleur sous 50 % de charge.</p>`,
-    retenir: "EDF → TGBT → onduleurs → gaines → PDU. Les batteries tiennent des minutes, le groupe des heures. En 2N, chaque onduleur reste sous 50 %.",
-    quiz: [
-      { q: "Une coupure EDF dure une heure, les batteries tiennent 15 minutes, pas de groupe. Que se passe-t-il ?", o: ["La salle s'éteint au bout de 15 minutes", 'Rien', 'Les onduleurs rechargent', 'Les serveurs ralentissent seulement'], a: 0, e: "Les batteries ne servent qu'à faire la jonction avec le groupe électrogène." },
-      { q: "Un onduleur de 100 kVA avec un facteur de puissance de 0,9 fournit…", o: ['90 kW', '100 kW', '111 kW', '9 kW'], a: 0, e: "kW = kVA × facteur de puissance." },
-      { q: "Les deux onduleurs sont chargés à 70 %. L'onduleur A tombe. Que se passe-t-il ?", o: ["B doit porter 140 % : il disjoncte, toute la salle tombe", 'B prend tout sans problème', 'Les serveurs passent sur une seule PSU sans souci', 'Rien'], a: 0, e: "D'où la règle des 50 % par voie." }] },
-  { id: 'recette', title: 'Recette : tester avant de livrer', vault: 'Méthode de dépannage réseau · Outils réseau', html: `
+    retenir: "EDF → TGBT → onduleurs → gaines → PDU. Les batteries tiennent des minutes, le groupe des heures. En 2N, chaque onduleur reste sous 50 %." },
+  { id: 'recette', title: 'Recette : tester avant de livrer', html: `
 <p>La <b>recette</b> vérifie qu'un service fonctionne <b>avant</b> de le livrer au client. On teste de bas en haut, depuis l'endroit où se trouve l'utilisateur.</p>
 <table><tr><th>Test</th><th>Commande</th><th>Ce qu'il prouve</th></tr>
 <tr><td>Passerelle</td><td><code>ping -c 3 172.16.10.1</code></td><td>Câble, VLAN, IP corrects</td></tr>
@@ -319,12 +233,8 @@ interface Te0/0/0
 <tr><td>Dépendance</td><td><code>psql -h 10.20.0.10 -c "select 1"</code></td><td>Flux entre zones autorisé</td></tr></table>
 <p>On ajoute une <b>recette qualité</b> : double alimentation, RAID, obturateurs, BPDU Guard, étiquetage. Elle ne bloque pas la livraison, mais elle évite les pannes de demain.</p>
 <p>Le résultat est consigné dans un procès-verbal de recette, signé par le client.</p>`,
-    retenir: "Tester de bas en haut, depuis la place de l'utilisateur : ping, port, application, dépendances. Puis la qualité : alimentation, RAID, obturateurs, étiquettes.",
-    quiz: [
-      { q: "nmap affiche 443/tcp filtered depuis Internet. Que soupçonner ?", o: ['Une règle de pare-feu manquante', 'Un disque plein', 'Un certificat expiré', 'Un VLAN natif'], a: 0, e: "filtered = aucune réponse : quelque chose bloque en chemin." },
-      { q: "curl répond « certificate has expired ». Quelle couche ?", o: ['Application (7)', 'Physique (1)', 'Liaison (2)', 'Réseau (3)'], a: 0, e: "Le réseau fonctionne, c'est le service qui a un problème." },
-      { q: "Pourquoi tester depuis Internet et pas depuis le switch ?", o: ["Pour passer par le même chemin que les vrais utilisateurs", 'Parce que le switch ne sait pas pinguer', 'Pour aller plus vite', 'Par habitude'], a: 0, e: "Un test qui ne traverse pas le pare-feu ne prouve rien sur les règles." }] },
-  { id: 'ad', title: 'Active Directory et Kerberos', vault: 'Windows Server 2022 - Active Directory', html: `
+    retenir: "Tester de bas en haut, depuis la place de l'utilisateur : ping, port, application, dépendances. Puis la qualité : alimentation, RAID, obturateurs, étiquettes." },
+  { id: 'ad', title: 'Active Directory et Kerberos', html: `
 <p><b>Active Directory</b> est l'annuaire de Windows Server : comptes, groupes, ordinateurs, stratégies (GPO). Il repose sur trois protocoles :</p>
 <table><tr><th>Protocole</th><th>Port</th><th>Rôle</th></tr>
 <tr><td>LDAP / LDAPS</td><td>TCP 389 / 636</td><td>Interroger l'annuaire</td></tr>
@@ -332,12 +242,8 @@ interface Te0/0/0
 <tr><td>DNS</td><td>53</td><td>Trouver les contrôleurs de domaine (enregistrements SRV)</td></tr></table>
 <p>Kerberos refuse l'authentification si l'horloge du client s'écarte de plus de <b>5 minutes</b> de celle du contrôleur : <b>NTP</b> est indispensable.</p>
 <p>L'annuaire reste en zone SERVEURS : les utilisateurs distants l'atteignent à travers le VPN, jamais directement depuis Internet.</p>`,
-    retenir: "AD = LDAP 389/636 + Kerberos 88 + DNS. Écart d'horloge maximal 5 minutes : NTP obligatoire. Jamais exposé directement à Internet.",
-    quiz: [
-      { q: "Quel port pour LDAP chiffré ?", o: ['636', '389', '88', '443'], a: 0, e: "LDAPS sur 636 ; 389 est le LDAP classique." },
-      { q: "Les connexions échouent avec « clock skew too great ». Cause ?", o: ["L'horloge du client s'écarte de plus de 5 minutes", 'Le DNS', 'Le port 389 fermé', 'Le disque plein'], a: 0, e: "Kerberos protège ses tickets avec l'heure : NTP partout." },
-      { q: "Les agences doivent joindre l'annuaire. Comment ?", o: ['Par le VPN, puis DMZ → SERVEURS sur les seuls ports utiles', "En ouvrant 389 depuis Internet", "En mettant l'AD en DMZ", 'Par FTP'], a: 0, e: "Un annuaire exposé à Internet est une cible de choix." }] },
-  { id: 'k8s', title: 'Conteneurs et Kubernetes', vault: 'Kubernetes - Introduction · Docker - Cours', html: `
+    retenir: "AD = LDAP 389/636 + Kerberos 88 + DNS. Écart d'horloge maximal 5 minutes : NTP obligatoire. Jamais exposé directement à Internet." },
+  { id: 'k8s', title: 'Conteneurs et Kubernetes', html: `
 <p>Un <b>conteneur</b> embarque une application et ses dépendances, sans système complet : il démarre en une seconde. <b>Kubernetes</b> répartit les conteneurs sur un groupe de serveurs, les <b>nœuds</b>, et les relance si un nœud tombe.</p>
 <table><tr><th>Élément</th><th>Rôle</th></tr>
 <tr><td>Pod</td><td>Un ou plusieurs conteneurs qui vivent ensemble</td></tr>
@@ -345,11 +251,7 @@ interface Te0/0/0
 <tr><td>API</td><td>TCP 6443, pour <code>kubectl</code>, réservée à l'administration</td></tr>
 <tr><td>Service NodePort</td><td>Publie une application sur un port de 30000 à 32767 de chaque nœud</td></tr></table>
 <p>Pour survivre à la perte d'une baie, on répartit les nœuds sur <b>plusieurs baies</b>, et un répartiteur de charge en DMZ envoie le trafic vers les NodePorts.</p>`,
-    retenir: "Conteneur = application + dépendances. Kubernetes répartit les pods sur des nœuds. API sur 6443 pour l'admin, NodePort de 30000 à 32767. Nœuds répartis sur plusieurs baies.",
-    quiz: [
-      { q: "Dans quelle plage se trouvent les ports NodePort ?", o: ['30000 à 32767', '1 à 1023', '8000 à 8080', '49152 à 65535'], a: 0, e: "C'est la plage par défaut de Kubernetes." },
-      { q: "Qui doit pouvoir joindre l'API Kubernetes (6443) ?", o: ["Uniquement l'administration", 'Tout Internet', 'La DMZ', 'Le stockage'], a: 0, e: "L'API pilote tout le cluster : on la protège comme un accès administrateur." },
-      { q: "Pourquoi trois nœuds dans trois baies ?", o: ["Pour qu'une baie en panne ne coupe pas le service", 'Pour aller plus vite', 'Pour économiser', 'Parce que Kubernetes l’impose'], a: 0, e: "Une baie partage une alimentation et un switch : c'est un domaine de panne." }] },
+    retenir: "Conteneur = application + dépendances. Kubernetes répartit les pods sur des nœuds. API sur 6443 pour l'admin, NodePort de 30000 à 32767. Nœuds répartis sur plusieurs baies." },
 ];
 // Les fiches suivent l'ordre où les contrats les introduisent (la recette arrive avec le premier contrat client)
 (() => {

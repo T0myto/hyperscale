@@ -21,7 +21,7 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 | 4 · Notions avancées | Studio Pixel, Protéger l'accès au routeur, Filtrer en bordure, Agences Plus, Campus Numérique, Hébergeur régional | attaques, ACL standard et lignes VTY, ACL étendue, Active Directory, Kubernetes, double opérateur |
 
 - **Guide pas à pas** : chaque étape a un bouton « Montrer » qui amène au bon endroit, et un lien « Pourquoi ? » vers la fiche de cours.
-- **Avant et après chaque contrat** : les notions à apprendre, puis ce qu'il faut retenir et le quiz.
+- **Avant et après chaque contrat** : les notions à apprendre, puis ce qu'il faut retenir, avec un lien vers chaque fiche.
 - **Pannes progressives** : après chaque contrat arrive une panne liée à ce qui vient d'être installé ; seules reviennent au hasard les pannes déjà rencontrées.
 
 ## Contenu
@@ -35,7 +35,7 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
   - **Aide** : mode d'emploi et fiches liées.
 - **Console** avec des sorties réalistes (Cisco IOS, Linux, Proxmox, nftables) et la commande équivalente de chaque action.
 - **Incidents** (pannes matérielles, coupures, attaques) détectés par la supervision, le client ou l'IDS, avec une méthode de dépannage par couches OSI.
-- **24 fiches de cours** avec quiz, dans l'ordre du parcours.
+- **24 fiches de cours**, dans l'ordre du parcours : le résumé du jeu, puis la note de cours complète du vault cours-sisr-main (tableaux, encadrés, schémas Mermaid, images). Les 4 sujets propres au datacenter (baie, froid, salle, onduleurs) n'ont pas de note de cours : la fiche du jeu en tient lieu.
 - Pas de factures : seuls les contrats en service rapportent de l'argent.
 
 ## Structure
@@ -48,6 +48,9 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 | `dc/sim.js` | État du jeu, énergie, froid, réseau, ACL, contrats, argent |
 | `dc/actions.js` | Actions du joueur (acheter, placer, câbler, configurer) |
 | `dc/learn.js` | Fiches, incidents, tickets, recette |
+| `dc/cours.js` | Notes de cours embarquées (généré par `tools/gen-cours.js`) |
+| `dc/md.js` | Affichage des notes de cours (Markdown Obsidian, schémas Mermaid) |
+| `cours/img/` | Images des notes de cours |
 | `dc/console.js` | Console, sorties des commandes, mode configuration Cisco IOS |
 | `dc/view.js` | Vue SVG d'une baie |
 | `dc/room.js` | Vue de la salle, déplacement dans les allées |
@@ -59,6 +62,11 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 node tools/build.js
 ```
 Régénère `index.html` après une modification de `hyperscale.html`.
+
+```bash
+node tools/gen-cours.js "<chemin du vault cours-sisr-main>"
+```
+Reprend les notes de cours liées à chaque fiche (`dc/cours.js`) et leurs images (`cours/img/`). À relancer après une modification de ces notes.
 
 ```bash
 node tools/gen-vault.js . "<chemin du vault Obsidian>"
