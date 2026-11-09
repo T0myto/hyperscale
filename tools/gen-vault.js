@@ -5,10 +5,10 @@ const [GAME, VAULT] = process.argv.slice(2);
 global.localStorage = { getItem() { return null; }, setItem() {} };
 const src = ['data', 'sim', 'actions', 'learn', 'console'].map(f => fs.readFileSync(path.join(GAME, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
 const API = new Function(src + `
-return { FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
+return { FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, IF_CMDS, CONF_CMDS, RIF_CMDS, LINE_CMDS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
   newState, actAccept, actPlace, actPlug, actConnect, actPortCfg, actDeploy, actAddRule, actAddDisk, actSetRaid, actInstallRack, derive, devsOfKind, cmdList,
   get S(){ return S; }, freeIp };`)();
-const { FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES } = API;
+const { FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES } = API;
 
 /* ---------- utilitaires ---------- */
 // Garde la progression déjà cochée dans les notes existantes (revise, quiz_reussi, maitrise).
@@ -51,7 +51,8 @@ API.newState();
 const S = API.S;
 S.money = 1e6;
 S.unlocked.push('nas', 'ram', 'hdd');
-API.actAccept('c1'); API.actAccept('c2');
+S.contracts.push({ id: 'c5', state: 'offer' }, { id: 'c7', state: 'offer' });
+API.actAccept('c5'); API.actAccept('c7');
 const R1 = API.actInstallRack('A', 1);
 const rtr = API.actPlace('router', R1, 40), fw = API.actPlace('fw', R1, 38);
 const sw = API.actPlace('sw24', R1, 36), srv = API.actPlace('srv1', R1, 34), srv2 = API.actPlace('srv1', R1, 32), nas = API.actPlace('nas', R1, 28);
@@ -71,19 +72,28 @@ API.actPortCfg(sw, 'Gi1/0/1', { mode: 'trunk', allowed: [10, 20, 30, 99], native
 API.actPortCfg(sw, 'Gi1/0/2', { mode: 'trunk', allowed: [10, 20, 30, 99], native: 999 });
 API.actPortCfg(sw, 'Te1/1/2', { vlan: 30 });
 API.derive();
-const web = API.actDeploy('c1', 'web', srv.id, 10, API.freeIp(10), srv.id);
-API.actDeploy('c2', 'web', srv2.id, 10, API.freeIp(10), srv2.id);
-API.actDeploy('c2', 'db', srv.id, 20, API.freeIp(20), srv.id);
+const web = API.actDeploy('c5', 'web', srv.id, 10, API.freeIp(10), srv.id);
+API.actDeploy('c7', 'web', srv2.id, 10, API.freeIp(10), srv2.id);
+API.actDeploy('c7', 'db', srv.id, 20, API.freeIp(20), srv.id);
 for (const r of [['Internet', 'DMZ', 'tcp', 443], ['DMZ', 'SERVEURS', 'tcp', 5432], ['Internet', 'DMZ', 'tcp', 22]]) API.actAddRule({ src: r[0], dst: r[1], proto: r[2], port: r[3] });
 API.derive();
 S.contracts.forEach(c => { if (c.state === 'setup') c.state = 'active'; });
 API.derive();
 
 /* ---------- Fiches ---------- */
+// Les cases cochées suivent la fiche par son identifiant, même si son numéro change
+const oldProg = {};
+const fdir = path.join(VAULT, 'Fiches');
+if (fs.existsSync(fdir)) for (const fn of fs.readdirSync(fdir)) {
+  const t = fs.readFileSync(path.join(fdir, fn), 'utf8'), m = t.match(/^fiche: (\w+)$/m);
+  if (m) oldProg[m[1]] = ['revise', 'quiz_reussi'].filter(k => new RegExp(`^${k}: true$`, 'm').test(t));
+}
+const withProg = (id, txt) => (oldProg[id] || []).reduce((x, k) => x.replace(new RegExp(`^${k}: false$`, 'm'), `${k}: true`), txt);
+const taughtBy = id => CONTRACTS.map((c, i) => c.notions.includes(id) ? `- ${i + 1}. ${c.client}${c.mission ? ' (mission)' : ''}, chapitre ${c.chap}` : '').filter(Boolean);
 for (const f of FICHES) {
   const quiz = f.quiz.map((q, i) => { const ord = shuffle(q.o.length, f.id + i); return { q, ord, good: ord.indexOf(q.a) }; });
   const inc = Object.entries(INCIDENTS).filter(([, d]) => d.fiche === f.id).map(([k, d]) => `- [[Incidents/${safe(d.title)}|${d.title}]]`);
-  write(`Fiches/${ficheFile(f)}.md`, `---
+  write(`Fiches/${ficheFile(f)}.md`, withProg(f.id, `---
 tags: [jeu-sisr, fiche]
 fiche: ${f.id}
 revise: false
@@ -109,7 +119,8 @@ ${quiz.map(({ q, ord }, i) => `**${i + 1}. ${q.q}**\n${ord.map((j, k) => `- ${L[
 > [!success]- Correction
 ${quiz.map(({ q, good }, i) => `> ${i + 1}. **${L[good]}) ${q.o[q.a]}**. ${q.e}`).join('\n')}
 ${inc.length ? `\n## Incidents du jeu liés à cette fiche\n\n${inc.join('\n')}` : ''}
-`);
+${taughtBy(f.id).length ? `\n## Où le jeu l'enseigne\n\n${taughtBy(f.id).join('\n')}\n\nVoir [[Référence/Contrats et progression|Contrats et progression]].` : ''}
+`));
 }
 write('Fiches/00 - Sommaire des fiches.md', `---
 tags: [jeu-sisr, sommaire]
@@ -238,6 +249,64 @@ ${kinds.map(([name, tg]) => {
   }
   return `## ${name}\n\n| Commande | À quoi elle sert |\n|---|---|\n${rows.join('\n')}`;
 }).join('\n\n')}
+
+## Mode configuration (Cisco IOS)
+
+Dans l'onglet CLI d'un switch ou du routeur, on configure comme sur un vrai équipement Cisco. Chaque réglage fait dans l'onglet Config s'affiche aussi en commandes dans ce terminal.
+
+\`\`\`
+sw-a01-01# configure terminal
+sw-a01-01(config)# interface range Gi1/0/3-24
+sw-a01-01(config-if-range)# shutdown
+sw-a01-01(config-if-range)# exit
+sw-a01-01(config)# interface Gi1/0/1
+sw-a01-01(config-if)# switchport mode access
+sw-a01-01(config-if)# switchport access vlan 20
+sw-a01-01(config-if)# end
+sw-a01-01# show vlan brief
+\`\`\`
+
+### Configuration globale
+
+| Commande | Équipement | À quoi elle sert |
+|---|---|---|
+${API.CONF_CMDS.map(c => `| \`${c.p.replace(' <rest>', ' …').replace(' <n>', ' N').replace(/\|/g, '\\|')}\` | ${c.rt ? 'routeur' : c.sw ? 'switch' : 'switch et routeur'} | ${c.h} |`).join('\n')}
+| \`end\` · \`exit\` · \`do show …\` | tous | revenir au mode privilégié, remonter d'un niveau, lancer une commande show sans quitter |
+
+### Interface d'un switch
+
+| Commande | À quoi elle sert |
+|---|---|
+${API.IF_CMDS.map(c => `| \`${c.p.replace(/[{}]/g, '').replace(' <rest?>', '').replace('<n>', 'N').replace('<rest>', '…').replace(/\|/g, ' / ')}\` | ${c.h} |`).join('\n')}
+
+### Routeur : ACL, interfaces et lignes VTY
+
+\`\`\`
+rtr-01(config)# access-list 10 permit 10.99.0.0 0.0.0.255
+rtr-01(config)# line vty 0 4
+rtr-01(config-line)# transport input ssh
+rtr-01(config-line)# access-class 10 in
+rtr-01(config-line)# exit
+rtr-01(config)# ip access-list extended EDGE-IN
+rtr-01(config-ext-nacl)# deny ip 10.0.0.0 0.255.255.255 any
+rtr-01(config-ext-nacl)# permit tcp host 198.51.100.1 host 198.51.100.2 eq bgp
+rtr-01(config-ext-nacl)# permit tcp any host 203.0.113.10 eq 443 22
+rtr-01(config-ext-nacl)# exit
+rtr-01(config)# interface Te0/0/0
+rtr-01(config-if)# ip access-group EDGE-IN in
+rtr-01(config-if)# end
+rtr-01# show access-lists
+\`\`\`
+
+| Mode | Commande | À quoi elle sert |
+|---|---|---|
+| ACL \`(config-ext-nacl)\` | \`permit\` ou \`deny\` PROTO SOURCE DESTINATION [\`eq\` PORT…] | ajoute une ligne à la fin (numéro + 10) ; \`eq\` accepte jusqu'à 10 ports |
+| ACL \`(config-ext-nacl)\` | \`15 permit …\` · \`no 20\` · \`remark …\` | insère au numéro 15, supprime la ligne 20, commente |
+${API.RIF_CMDS.map(c => `| Interface \`(config-if)\` | \`${c.p.replace(' <rest>', ' NOM in')}\` | ${c.h} |`).join('\n')}
+${API.LINE_CMDS.map(c => `| Lignes VTY \`(config-line)\` | \`${c.p.replace(' <rest>', ' …')}\` | ${c.h} |`).join('\n')}
+
+> [!tip] Adresses dans une ACL
+> \`any\` = n'importe qui · \`host 203.0.113.10\` = une seule adresse · \`10.0.0.0 0.255.255.255\` = un réseau avec son masque générique (l'inverse du masque). Voir la fiche ${ficheLink('acl')}.
 
 ## Lire les sorties
 
@@ -503,6 +572,21 @@ flowchart TB
     S ---|"access 30"| N["Baie de stockage<br/>NFS"]
 \`\`\`
 `);
+const unlockLabel = u => (CAT[u] && CAT[u].name) || (CABLES[u] && CABLES[u].name) || (ROOM_ITEMS[u] && ROOM_ITEMS[u].name) || (DISKS[u] && DISKS[u].name) || (u === 'ram' ? 'extensions de mémoire' : u);
+const contractNote = (c, i) => `### ${i + 1}. ${c.client}${c.mission ? ' (mission)' : c.internal ? ' (projet interne)' : ''}
+
+- [ ] ${c.mission ? 'Réussie' : 'Mise en service'}
+
+*${c.what}*
+${c.notions.length ? `\n**Notions** : ${c.notions.map(ficheLink).join(', ')}\n` : ''}${c.goals ? `\n**Objectifs**\n\n${c.goals.map((g, k) => `${k + 1}. ${g.t}`).join('\n')}\n` : ''}${c.svcs.length ? `
+| Service | Nombre | VLAN | Contrainte |
+|---|---|---|---|
+${c.svcs.map(s => `| ${SVC[s.s].name} (${SVC[s.s].soft}) | ${s.n} | ${SVC[s.s].zone} ${VLANS[SVC[s.s].zone].name} | ${[s.raid ? (s.raid === 10 ? 'RAID 10' : 'RAID avec tolérance') : '', s.anti ? 'hôtes différents' : '', s.antiRack ? 'baies différentes' : '', SVC[s.s].nas ? 'stockage sur la baie NAS' : ''].filter(Boolean).join(', ') || '—'} |`).join('\n')}
+` : ''}${c.lanOnly ? '\nService purement interne : les postes du client sont dans le même VLAN, il n\'a pas besoin de passerelle ni de pare-feu.\n' : ''}${c.flows.length ? `\n**Flux à ouvrir sur le pare-feu** : ${c.flows.map(f => `${f[0]} → ${f[1]} ${f[2].toUpperCase()} ${f[3]}`).join(' ; ')}\n` : ''}${c.needOp2 ? '\n**Exige** deux opérateurs actifs (BGP).\n' : ''}${c.needGen ? '\n**Exige** un groupe électrogène.\n' : ''}
+**Livraison** : ${c.mission ? 'la mission se valide dans le jeu dès que tous les objectifs sont atteints.' : 'par la [[Aide-mémoire/Recette des contrats|recette]].'}
+
+**Revenu** : ${c.rev ? mo(c.rev) + ' par heure de jeu' : '—'} · **Prime** : ${mo(c.bonus)}${c.unlock.length ? ` · **Débloque** : ${c.unlock.map(unlockLabel).join(', ')}` : ''}${TEACH[c.id] ? `\n\n**Incidents introduits ensuite** : ${TEACH[c.id].map(k => `[[Incidents/${safe(INCIDENTS[k].title)}|${INCIDENTS[k].title}]]`).join(', ')}` : ''}
+`;
 write('Référence/Contrats et progression.md', `---
 tags: [jeu-sisr, reference, contrats]
 ---
@@ -511,24 +595,23 @@ tags: [jeu-sisr, reference, contrats]
 
 ← ${ACCUEIL}
 
-Les contrats arrivent dans cet ordre. Chacun en service débloque du matériel et déclenche de nouveaux incidents pour apprendre.
+Le jeu avance en ${CHAPTERS.length} chapitres, des notions vues en cours aux notions avancées. Chaque contrat introduit une ou deux notions, avec leurs fiches de cours. Une **mission** se valide dès que ses objectifs sont atteints ; un **contrat client** se livre par une recette. Dans le jeu, chaque étape du guide a un bouton « Montrer » qui amène au bon endroit, et un lien « Pourquoi ? » vers la fiche.
 
-${CONTRACTS.map((c, i) => `## ${i + 1}. ${c.client}${c.internal ? ' (projet interne)' : ''}
+\`\`\`mermaid
+flowchart LR
+${CHAPTERS.map(ch => `    C${ch.n}["Chapitre ${ch.n}<br/>${ch.name}"]`).join('\n')}
+    ${CHAPTERS.map(ch => `C${ch.n}`).join(' --> ')}
+\`\`\`
 
-- [ ] Mis en service
+${CHAPTERS.map(ch => `## Chapitre ${ch.n} · ${ch.name}
 
-*${c.what}*
+> ${ch.desc}
 
-| Service | Nombre | VLAN | Contrainte |
-|---|---|---|---|
-${c.svcs.map(s => `| ${SVC[s.s].name} (${SVC[s.s].soft}) | ${s.n} | ${SVC[s.s].zone} ${VLANS[SVC[s.s].zone].name} | ${[s.raid ? (s.raid === 10 ? 'RAID 10' : 'RAID avec tolérance') : '', s.anti ? 'hôtes différents' : '', s.antiRack ? 'baies différentes' : '', SVC[s.s].nas ? 'stockage sur la baie NAS' : ''].filter(Boolean).join(', ') || '—'} |`).join('\n')}
+${CONTRACTS.map((c, i) => c.chap === ch.n ? contractNote(c, i) : '').filter(Boolean).join('\n')}`).join('\n')}
 
-**Flux à ouvrir sur le pare-feu** : ${c.flows.map(f => `${f[0]} → ${f[1]} ${f[2].toUpperCase()} ${f[3]}`).join(' ; ')}${c.needOp2 ? '\n\n**Exige** deux opérateurs actifs (BGP).' : ''}${c.needGen ? '\n\n**Exige** un groupe électrogène.' : ''}
+## Après le dernier contrat
 
-**Livraison** : par la [[Aide-mémoire/Recette des contrats|recette]].
-
-**Revenu** : ${c.rev ? mo(c.rev) + ' par heure de jeu' : '—'} · **Prime** : ${mo(c.bonus)}${c.unlock.length ? ` · **Débloque** : ${c.unlock.map(u => (CAT[u] && CAT[u].name) || (CABLES[u] && CABLES[u].name) || (ROOM_ITEMS[u] && ROOM_ITEMS[u].name) || (DISKS[u] && DISKS[u].name) || (u === 'ram' ? 'extensions de mémoire' : u)).join(', ')}` : ''}${TEACH[c.id] ? `\n\n**Incidents introduits ensuite** : ${TEACH[c.id].map(k => `[[Incidents/${safe(INCIDENTS[k].title)}|${INCIDENTS[k].title}]]`).join(', ')}` : ''}
-`).join('\n')}
+D'autres clients continuent d'arriver (site web, DNS, messagerie ou VPN), avec des revenus de plus en plus élevés.
 
 ## Grades
 
@@ -580,6 +663,15 @@ tags: [jeu-sisr, memo, glossaire]
 | **Onduleur (UPS)** | Fournit un courant propre et tient sur batteries pendant une coupure |
 | **Recette** | Série de tests qui prouve qu'un service fonctionne avant de le livrer |
 | **TGBT** | Tableau général basse tension : il reçoit l'arrivée EDF |
+| **ACL** | Liste de règles permit / deny lue de haut en bas sur un routeur ; la première qui correspond décide |
+| **ACL standard, étendue** | Standard (1 à 99) : source seule. Étendue (100 à 199 ou nommée) : protocole, source, destination, port |
+| **Anti-usurpation (anti-spoofing)** | Refuser en entrée les adresses privées qui ne peuvent pas venir d'Internet |
+| **Deny implicite** | Ligne invisible en fin d'ACL qui refuse tout ce qui n'a pas été autorisé |
+| **Masque générique (wildcard)** | Inverse du masque de sous-réseau, utilisé dans les ACL : 0.0.0.255 pour un /24 |
+| **PortFast** | Port d'accès qui passe tout de suite en transmission, sans attendre le Spanning Tree |
+| **SSH, Telnet** | Accès à distance en ligne de commande : chiffré pour SSH, en clair pour Telnet |
+| **VLAN natif** | VLAN non étiqueté d'un trunk ; on le place sur un VLAN vide (999) contre le VLAN hopping |
+| **VTY** | Lignes virtuelles d'accès à distance d'un équipement Cisco (line vty 0 4) |
 `);
 
 /* ---------- Progression (Base) ---------- */
@@ -644,7 +736,7 @@ tags: [jeu-sisr, accueil]
 
 # Jeu SISR : Hyperscale
 
-Le simulateur de datacenter du jeu Hyperscale, et tout ce qu'il enseigne, en notes. Tu pars d'une salle vide de six rangées avec ${mo(ECO.start)} : baies, matériel, câblage, énergie et froid sont à construire, contrat après contrat, et chaque livraison passe par une recette.
+Le simulateur de datacenter du jeu Hyperscale, et tout ce qu'il enseigne, en notes. Tu pars d'une salle vide de six rangées avec ${mo(ECO.start)} : baies, matériel, câblage, énergie et froid sont à construire, contrat après contrat, des notions vues en cours jusqu'aux ACL. Chaque contrat client se livre par une recette.
 
 > [!abstract] Jouer
 > - En ligne : [Hyperscale](${GAME_URL})
@@ -652,6 +744,7 @@ Le simulateur de datacenter du jeu Hyperscale, et tout ce qu'il enseigne, en not
 
 ## Apprendre
 
+- [[Référence/Contrats et progression|Le parcours]] : ${CHAPTERS.length} chapitres, ${CONTRACTS.length} contrats, des notions vues en cours jusqu'aux ACL
 - [[Fiches/00 - Sommaire des fiches|Les ${FICHES.length} fiches de cours]], chacune avec son quiz
 - [[Incidents/00 - Méthode et liste des incidents|Méthode de dépannage et les ${incList.length} incidents]]
 - [[Progression.base|Progression]] : fiches à réviser, incidents maîtrisés
@@ -682,7 +775,7 @@ flowchart LR
 \`\`\`
 
 > [!info] Lien avec tes cours
-> Les fiches viennent du vault **cours-sisr-main** (Câblage fibre SFP et PoE, Fonctionnement d'un switch, Pare-feu et DMZ, Linux - RAID, Sécurité de niveau 2, Méthode de dépannage réseau, Supervision SNMP Syslog NTP…), complétées pour le datacenter.
+> Les fiches viennent du vault **cours-sisr-main** (Câblage fibre SFP et PoE, Fonctionnement d'un switch, Cisco - ACL NAT Sécurité, Pare-feu et DMZ, Linux - RAID, Sécurité de niveau 2, Méthode de dépannage réseau, Supervision SNMP Syslog NTP…), complétées pour le datacenter.
 `);
 
 /* ---------- Copie du jeu, jouable hors ligne ---------- */
@@ -716,9 +809,25 @@ tags: [jeu-sisr, jeu]
 | \`dc/room.js\` | La salle vue de dessus et le déplacement du technicien |
 | \`dc/ui.js\` | Panneaux, fenêtres, recette, console, boucle de jeu |
 
-> [!tip] Commandes dans le jeu
-> Dans la salle : flèches ou ZQSD pour marcher, clic sur une baie pour l'ouvrir. Dans une baie : F bascule face avant et face arrière, un double-clic sur un équipement ouvre sa fenêtre de configuration, Échap revient à la salle. Espace met en pause, la molette zoome.
+> [!tip] Prendre en main
+> - Le panneau **Contrats** donne les étapes une par une. Le bouton « 👉 Montrer » t'amène au bon endroit, « Pourquoi ? » ouvre la fiche de cours.
+> - Dans la salle : flèches ou ZQSD pour marcher, clic sur une baie pour l'ouvrir. Dans une baie : F bascule face avant et face arrière, Échap revient à la salle, Espace met en pause.
+> - Un double-clic sur un équipement ouvre sa fenêtre : onglets **Physique** (alimentations, ports, câbles), **Config** (VLAN, RAID, ACL…), **CLI** (vraies commandes Cisco IOS) et **Aide** (mode d'emploi et fiches liées).
 `);
 
+/* ---------- Nettoyage : notes générées qui n'existent plus (fiches renumérotées, fichiers retirés) ---------- */
+const keep = new Set(written.map(w => w.split('/').join(path.sep)));
+for (const dir of ['Fiches', 'Incidents', 'Référence', 'Aide-mémoire', 'Jeu']) {
+  (function walk(d) {
+    if (!fs.existsSync(d)) return;
+    for (const f of fs.readdirSync(d)) {
+      const p = path.join(d, f), rel = path.relative(VAULT, p);
+      if (fs.statSync(p).isDirectory()) { walk(p); continue; }
+      if (keep.has(rel)) continue;
+      const gen = rel.startsWith(path.join('Jeu', 'dc')) || (f.endsWith('.md') && /^tags: \[jeu-sisr/m.test(fs.readFileSync(p, 'utf8')));
+      if (gen) { fs.unlinkSync(p); console.log('supprimé (obsolète) : ' + rel); }
+    }
+  })(path.join(VAULT, dir));
+}
 console.log(written.length + ' fichiers');
 console.log(written.join('\n'));

@@ -156,50 +156,114 @@ const SVC = {
   k8s:  { name: 'Nœud Kubernetes', soft: 'kubelet et containerd', unit: 'kubelet', vcpu: 8, ram: 32, disk: 120, ports: [['tcp', 30443], ['tcp', 6443]], zone: 20, bw: 120 },
 };
 
-/* ---------- Contrats ---------- */
+/* ---------- Contrats ----------
+   Chaque contrat introduit une ou deux notions (fiches de cours), des plus simples aux plus avancées.
+   Une mission (goals) se valide dès que ses objectifs sont atteints ; un contrat client (svcs) se livre par une recette. */
+const CHAPTERS = [
+  { n: 1, name: 'Les bases', desc: "Ce que tu as vu en cours : la baie, l'alimentation, le câble, le switch, les VLAN, l'adresse IP et la virtualisation." },
+  { n: 2, name: 'Ouvrir sur Internet', desc: "La fibre vers les opérateurs, le routeur, le pare-feu, la DMZ, les ports TCP et UDP et la matrice de flux." },
+  { n: 3, name: 'Exploiter la salle', desc: "La supervision, les sauvegardes, la sécurité du niveau 2, la haute disponibilité et le refroidissement." },
+  { n: 4, name: 'Notions avancées', desc: "Les attaques, les ACL du routeur, l'annuaire, les conteneurs et le double opérateur." },
+];
 const CONTRACTS = [
-  { id: 'c1', client: 'Le Fournil', what: "Première baie : le site vitrine de la boulangerie. Tout est à construire.", tuto: true,
+  { id: 'c1', chap: 1, client: 'Ta première baie', mission: true, what: "Pose une baie, installe un switch et un serveur, puis alimente-les proprement.", notions: ['baie', 'elec'],
+    goals: [
+      { k: 'rack', t: "Dans la salle, clique un emplacement libre de la rangée A et installe une baie 42U", fiche: 'baie', ok: () => CHK.rack() },
+      { k: 'shop', t: "Ouvre la baie et installe un switch d'accès 24 ports et un serveur 1U (bouton Catalogue)", fiche: 'baie', ok: () => devsOfKind('switch').length > 0 && devsOfKind('server').length > 0 },
+      { k: 'plugsw', t: "Passe en face arrière (touche F) et branche l'alimentation du switch sur un PDU", fiche: 'elec', ok: () => devsOfKind('switch').some(d => d.psus.every(p => p.out)) },
+      { k: 'plugsrv', t: "Branche les deux alimentations du serveur sur deux voies : PSU1 sur le PDU A, PSU2 sur le PDU B", fiche: 'elec', ok: () => devsOfKind('server').some(CHK.ab) },
+    ],
+    rev: 0, bonus: 1000, unlock: [] },
+  { id: 'c2', chap: 1, client: 'Le réseau local', mission: true, what: "Relie le serveur au switch et range son port dans le bon VLAN.", notions: ['cuivre', 'switch'],
+    goals: [
+      { k: 'cablesrv', t: "Relie la carte eno1 du serveur à un port Gi du switch avec un câble cuivre Cat 6", fiche: 'cuivre', ok: () => CHK.srvLinks().length > 0 },
+      { k: 'cfgsrv', t: "Ouvre le switch (double-clic), onglet Config : passe ce port en mode access, VLAN 20 (SERVEURS)", fiche: 'switch', ok: () => CHK.srvLinks().some(x => cfg(dev(x.o.d), x.o.p).mode === 'access' && carries(x.o, 20)) },
+      { k: 'cfgsrv', t: "Donne une description à ce port, par exemple le nom du serveur", fiche: 'switch', ok: () => CHK.srvLinks().some(x => !!cfg(dev(x.o.d), x.o.p).desc) },
+      { k: 'clisw', t: "Vérifie dans l'onglet CLI du switch : tape show vlan brief", fiche: 'switch', ok: () => CHK.cmd('show vlan brief') },
+    ],
+    rev: 0, bonus: 800, unlock: [] },
+  { id: 'c3', chap: 1, client: 'Cabinet Marchand', what: "Une base de données pour le logiciel de comptabilité, utilisée seulement par les postes du cabinet, dans le VLAN 20.", notions: ['virtu', 'ip', 'raid'], lanOnly: true,
+    svcs: [{ s: 'db', n: 1, raid: 1 }], flows: [],
+    rev: 200, bonus: 1500, unlock: ['ram', 'hdd'] },
+  { id: 'c4', chap: 2, client: 'Raccorder la salle à Internet', mission: true, internal: true, what: "Installe le routeur et le pare-feu, puis relie-les aux opérateurs par la fibre.", notions: ['fibre', 'pf'],
+    goals: [
+      { k: 'shopnet', t: "Installe un routeur de bordure et un pare-feu dans ta baie (Catalogue)", fiche: 'pf', ok: () => devsOfKind('router').length > 0 && devsOfKind('fw').length > 0 },
+      { k: 'plugnet', t: "Alimente le routeur et le pare-feu sur les deux voies : PSU1 sur A, PSU2 sur B", fiche: 'elec', ok: () => ['router', 'fw'].every(k => devsOfKind(k).some(CHK.ab)) },
+      { k: 'oplink', t: "Relie le routeur (Te0/0/0) à l'ODF de la salle MMR (OP1) : fibre monomode OS2 avec modules LR", fiche: 'fibre', ok: () => CHK.opLink() },
+      { k: 'wanlink', t: "Relie le routeur (Te0/1/0) au port WAN du pare-feu (port1) avec un câble DAC", fiche: 'fibre', ok: () => CHK.wanLink() },
+      { k: 'clirtr', t: "Vérifie dans l'onglet CLI du routeur que l'opérateur répond : tape show bgp summary", fiche: 'fibre', ok: () => CHK.cmd('show bgp summary') && !!(D.inet && D.inet.ok) },
+    ],
+    rev: 0, bonus: 2000, unlock: [] },
+  { id: 'c5', chap: 2, client: 'Le Fournil', what: "Le site vitrine de la boulangerie, ouvert sur Internet en HTTPS. Il va dans la DMZ (VLAN 10).", notions: ['switch', 'pf', 'ports'],
     svcs: [{ s: 'web', n: 1 }], flows: [['Internet', 'DMZ', 'tcp', 443]],
-    rev: 160, bonus: 800, unlock: ['cat6a', 'om4'] },
-  { id: 'c2', client: 'Cabinet Marchand', what: "Logiciel de gestion avec sa base de données",
-    svcs: [{ s: 'web', n: 1 }, { s: 'db', n: 1, raid: 1 }], flows: [['Internet', 'DMZ', 'tcp', 443], ['DMZ', 'SERVEURS', 'tcp', 5432]], deps: [['web', 'db']],
-    rev: 380, bonus: 1200, unlock: ['srv2', 'hdd', 'ram'] },
-  { id: 'c3', client: 'Mairie de Saint-Aubin', what: "DNS de la commune et messagerie des agents",
+    rev: 260, bonus: 1500, unlock: ['cat6a', 'om4'] },
+  { id: 'c6', chap: 2, client: 'Mairie de Saint-Aubin', what: "Le DNS de la commune et la messagerie des agents. Chaque service écoute sur ses propres ports.", notions: ['ports', 'tls'],
     svcs: [{ s: 'dns', n: 1 }, { s: 'mail', n: 1 }],
     flows: [['Internet', 'DMZ', 'udp', 53], ['Internet', 'DMZ', 'tcp', 53], ['Internet', 'DMZ', 'tcp', 25], ['Internet', 'DMZ', 'tcp', 587], ['Internet', 'DMZ', 'tcp', 993]],
     rev: 520, bonus: 1500, unlock: ['leaf', 'rowpower'] },
-  { id: 'c4', client: 'Projet interne', internal: true, what: "Superviser la salle avec Zabbix",
+  { id: 'c7', chap: 2, client: 'Immo Laurent', what: "Un site d'annonces en DMZ qui interroge sa base de données dans le VLAN 20 : le pare-feu route entre les deux.", notions: ['ip', 'pf', 'dep'],
+    svcs: [{ s: 'web', n: 1 }, { s: 'db', n: 1, raid: 1 }], flows: [['Internet', 'DMZ', 'tcp', 443], ['DMZ', 'SERVEURS', 'tcp', 5432]], deps: [['web', 'db']],
+    rev: 420, bonus: 1800, unlock: ['srv2'] },
+  { id: 'c8', chap: 3, client: 'Superviser la salle', internal: true, what: "Une VM Zabbix dans le VLAN 99 (ADMIN) interroge les équipements en SNMP et reçoit leurs journaux.", notions: ['sup'],
     svcs: [{ s: 'mon', n: 1 }], flows: [['ADMIN', 'DMZ', 'udp', 161], ['ADMIN', 'SERVEURS', 'udp', 161]],
     rev: 0, bonus: 2500, unlock: ['nas', 'containment', 'crac'], effect: 'monitoring' },
-  { id: 'c5', client: 'Nordik Shop', what: "Boutique en ligne en haute disponibilité, répartie sur deux baies",
+  { id: 'c9', chap: 3, client: 'Sauvegardes 3-2-1', internal: true, what: "Une VM Bareos écrit les sauvegardes sur une baie de stockage, jamais sur le serveur qu'elle protège.", notions: ['bak', 'raid'],
+    svcs: [{ s: 'bak', n: 1 }], flows: [['SERVEURS', 'DMZ', 'tcp', 9102]],
+    rev: 0, bonus: 3000, unlock: ['gen', 'op2', 'battery'], effect: 'backup' },
+  { id: 'c10', chap: 3, client: 'Sécuriser les ports du switch', mission: true, internal: true, what: "Un prestataire branche parfois n'importe quoi dans la baie. Ferme les portes du niveau 2 avant que ça arrive.", notions: ['l2sec'],
+    goals: [
+      { k: 'bpdu', t: "Active PortFast et BPDU Guard sur chaque port de switch relié à un serveur", fiche: 'l2sec', ok: () => CHK.srvLinks().length > 0 && CHK.srvLinks().every(x => cfg(dev(x.o.d), x.o.p).bpdu) },
+      { k: 'unused', t: "Coupe tous les ports inutilisés : en CLI, interface range Gi1/0/3-24 puis shutdown", fiche: 'l2sec', ok: () => CHK.unusedOff() },
+      { k: 'native', t: "Sur chaque trunk du switch, passe le VLAN natif sur 999, un VLAN vide : c'est la parade au VLAN hopping", fiche: 'l2sec', ok: () => CHK.trunksNative() },
+      { k: 'clistatus', t: "Vérifie dans la CLI du switch : show interfaces status (les ports coupés sont « disabled »)", fiche: 'l2sec', ok: () => CHK.cmd('show interfaces status') },
+    ],
+    rev: 0, bonus: 2500, unlock: [] },
+  { id: 'c11', chap: 3, client: 'Nordik Shop', what: "Une boutique en ligne en haute disponibilité, répartie sur deux baies.", notions: ['archi', 'froid', 'salle'],
     svcs: [{ s: 'lb', n: 1 }, { s: 'web', n: 2, antiRack: true }, { s: 'db', n: 1, raid: 10 }],
     flows: [['Internet', 'DMZ', 'tcp', 443], ['DMZ', 'SERVEURS', 'tcp', 5432]], deps: [['lb', 'web'], ['web', 'db']],
     rev: 1300, bonus: 3000, unlock: ['spine', 'inrow', 'dacq', 'ups'] },
-  { id: 'c6', client: 'Projet interne', internal: true, what: "Sauvegardes 3-2-1 sur la baie de stockage",
-    svcs: [{ s: 'bak', n: 1 }], flows: [['SERVEURS', 'DMZ', 'tcp', 9102]],
-    rev: 0, bonus: 3000, unlock: ['gen', 'op2', 'battery'], effect: 'backup' },
-  { id: 'c7', client: 'Studio Pixel', what: "Dépôt de rushs vidéo en SFTP, 3 To",
+  { id: 'c12', chap: 4, client: 'Studio Pixel', what: "Un dépôt de rushs vidéo en SFTP, 3 To, exposé sur Internet : attention aux attaques par force brute.", notions: ['raid', 'attaques'],
     svcs: [{ s: 'sftp', n: 1 }], flows: [['Internet', 'DMZ', 'tcp', 22]],
     rev: 2000, bonus: 4000, unlock: [] },
-  { id: 'c8', client: 'Agences Plus', what: "VPN pour 40 agences et annuaire Active Directory",
+  { id: 'c13', chap: 4, client: "Protéger l'accès au routeur", mission: true, internal: true, what: "Des robots essaient sans arrêt d'ouvrir une session SSH sur le routeur. Seuls les administrateurs du VLAN 99 doivent pouvoir s'y connecter : c'est le travail d'une ACL standard.", notions: ['acl', 'attaques'],
+    goals: [
+      { k: 'stdacl', t: "Crée une ACL standard qui n'autorise que le réseau d'administration : access-list 10 permit 10.99.0.0 0.0.0.255", fiche: 'acl', ok: () => !!CHK.stdAdmin() },
+      { k: 'vtyssh', t: "Sur les lignes d'accès à distance, n'accepte que SSH : line vty 0 4, puis transport input ssh (Telnet circule en clair)", fiche: 'attaques', ok: () => CHK.vty().transport === 'ssh' },
+      { k: 'vtyacl', t: "Applique l'ACL aux lignes VTY : access-class 10 in", fiche: 'acl', ok: () => { const v = CHK.vty(); return !!v.acl && v.acl === CHK.stdAdmin(); } },
+      { k: 'clissh', t: "Vérifie dans la CLI du routeur : show ip ssh", fiche: 'attaques', ok: () => CHK.cmd('show ip ssh') },
+    ],
+    rev: 0, bonus: 2500, unlock: [] },
+  { id: 'c14', chap: 4, client: 'Filtrer en bordure : ACL', mission: true, internal: true, what: "Le routeur laisse tout entrer jusqu'au pare-feu. Pose une ACL étendue sur le lien opérateur : elle jette le trafic absurde avant qu'il n'entre.", notions: ['acl'],
+    goals: [
+      { k: 'aclmk', t: "Crée une ACL étendue sur le routeur : onglet Config, ou en CLI ip access-list extended EDGE-IN", fiche: 'acl', ok: () => { const t = CHK.aclTarget(); return !!(t && t.list.length); } },
+      { k: 'aclspoof', t: "En tête de liste, refuse les sources privées (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) : elles ne viennent jamais d'Internet", fiche: 'acl', ok: () => CHK.aclPk('spoof', 'deny') },
+      { k: 'aclbgp', t: "Autorise la session BGP de l'opérateur (TCP 179 depuis 198.51.100.1), sinon Internet tombe", fiche: 'acl', ok: () => CHK.aclPk('bgp', 'permit') },
+      { k: 'aclsvc', t: "Autorise les services publics de tes clients vers 203.0.113.10 : une ligne par protocole suffit, car eq accepte plusieurs ports (eq 443 22 25)", fiche: 'acl', ok: () => CHK.aclPk('svc', 'permit') },
+      { k: 'aclssh', t: "Ne laisse pas passer SSH vers le routeur lui-même (198.51.100.2) : vise host 203.0.113.10 plutôt que any pour SFTP", fiche: 'acl', ok: () => CHK.aclPk('ssh', 'deny') },
+      { k: 'aclapply', t: "Applique l'ACL en entrée sur le lien opérateur : interface Te0/0/0, puis ip access-group EDGE-IN in", fiche: 'acl', ok: () => { const t = CHK.aclTarget(); return !!(t && t.applied); } },
+      { k: 'aclshow', t: "Vérifie les compteurs dans la CLI du routeur : show access-lists", fiche: 'acl', ok: () => CHK.cmd('show access-lists') },
+    ],
+    rev: 0, bonus: 3000, unlock: [] },
+  { id: 'c15', chap: 4, client: 'Agences Plus', what: "Un VPN pour 40 agences et un annuaire Active Directory derrière.", notions: ['ad', 'tls'],
     svcs: [{ s: 'vpn', n: 1 }, { s: 'ad', n: 1 }], flows: [['Internet', 'DMZ', 'udp', 51820], ['DMZ', 'SERVEURS', 'tcp', 389], ['DMZ', 'SERVEURS', 'tcp', 88]], deps: [['vpn', 'ad']],
     rev: 1400, bonus: 3000, unlock: [] },
-  { id: 'c9', client: 'Campus Numérique', what: "Plateforme de cours en conteneurs : un cluster Kubernetes de 3 nœuds sur 3 baies",
+  { id: 'c16', chap: 4, client: 'Campus Numérique', what: "Une plateforme de cours en conteneurs : un cluster Kubernetes de 3 nœuds sur 3 baies.", notions: ['k8s', 'archi'],
     svcs: [{ s: 'lb', n: 1 }, { s: 'k8s', n: 3, antiRack: true }], flows: [['Internet', 'DMZ', 'tcp', 443], ['DMZ', 'SERVEURS', 'tcp', 30443], ['ADMIN', 'SERVEURS', 'tcp', 6443]], deps: [['lb', 'k8s']],
     rev: 3200, bonus: 6000, unlock: [] },
-  { id: 'c10', client: 'Hébergeur régional', what: "Capacité web en masse, SLA 99,95 % : deux opérateurs et un groupe électrogène", final: true, needOp2: true, needGen: true,
+  { id: 'c17', chap: 4, client: 'Hébergeur régional', what: "De la capacité web en masse avec un SLA de 99,95 % : deux opérateurs et un groupe électrogène.", notions: ['onduleur', 'archi'], final: true, needOp2: true, needGen: true,
     svcs: [{ s: 'lb', n: 2, antiRack: true }, { s: 'web', n: 4, antiRack: true }],
     flows: [['Internet', 'DMZ', 'tcp', 443]], deps: [['lb', 'web']],
     rev: 6000, bonus: 10000, unlock: [] },
 ];
+CONTRACTS.forEach(c => { c.svcs = c.svcs || []; c.flows = c.flows || []; c.notions = c.notions || []; });
 function contractDef(id) {
   const c = CONTRACTS.find(x => x.id === id);
   if (c) return c;
   const k = +id.slice(1) - CONTRACTS.length;
   const pick = ['web', 'dns', 'mail', 'vpn'][k % 4];
   const svc = SVC[pick];
-  return { id, client: ['Clinique Saint-Luc', 'Cave Bertin', 'Lycée Jean-Moulin', 'Transports Rivière', 'Atelier Noé'][k % 5] + ` (n° ${k})`,
-    what: `${svc.name} pour un nouveau client`, svcs: [{ s: pick, n: 1 + (k % 2) }],
+  return { id, chap: 4, client: ['Clinique Saint-Luc', 'Cave Bertin', 'Lycée Jean-Moulin', 'Transports Rivière', 'Atelier Noé'][k % 5] + ` (n° ${k})`,
+    what: `${svc.name} pour un nouveau client`, svcs: [{ s: pick, n: 1 + (k % 2) }], notions: [],
     flows: svc.ports.map(p => ['Internet', 'DMZ', p[0], p[1]]), rev: 500 + 150 * k, bonus: 1000 + 200 * k, unlock: [] };
 }
 

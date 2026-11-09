@@ -51,13 +51,13 @@ function cli(d, lines) {
 /* ---------- Création ---------- */
 function newState() {
   S = {
-    v: 3, money: ECO.start, t: 8 * 60, xp: 0, racks: [], devs: {}, cables: [], vms: [], rules: [], contracts: [], tickets: [],
+    v: 4, money: ECO.start, t: 8 * 60, xp: 0, racks: [], devs: {}, cables: [], vms: [], rules: [], contracts: [], tickets: [],
     codex: { seen: {}, quiz: {} }, unlocked: [...DEFAULT_UNLOCKED], feeds: { A: true, B: true },
     power: { edf: true, batt: 15, battMax: 15, gen: false, genRun: false, genT: 0, ups: { A: { kw: 20, trip: false }, B: { kw: 20, trip: false } }, rows: { A: true } },
     cool: { cracs: [{ slot: 0, ok: true }], contain: {} },
     room: { op2: false }, fwopt: { syn: false, scrub: false, block: [] },
     seq: { d: 0, c: 0, v: 0, t: 0, h: {}, s: {} }, syslog: [], events: [], cli: [], flags: {}, timers: {},
-    nextInc: 8 * 60 + 200, teach: [], speed: 1, done: 0, tuto: true,
+    nextInc: 8 * 60 + 200, teach: [], speed: 1, done: 0,
   };
   addRack('MMR', 0, 'mmr');
   addDevice('odf', 0, 21);
@@ -301,6 +301,73 @@ function l2Search(fromDev, portFilter, v, isGoal) {
   }
   return { ok: false, blocked };
 }
+/* ---------- Progression : vérifications des missions et du guide ---------- */
+const CHK = {
+  rack: () => S.racks.some(r => r.kind === 'rack'),
+  // deux alimentations branchées, chacune sur une voie différente
+  ab: d => d.psus.length === 2 && d.psus.every(p => p.out) && d.psus[0].out.pdu !== d.psus[1].out.pdu,
+  // liens de données serveur → switch : { s, sp, o (extrémité côté switch), c }
+  srvLinks: () => {
+    const out = [];
+    for (const s of devsOfKind('server')) for (const p of CAT[s.type].ports) if (p.role !== 'bmc') {
+      const c = portCable(s.id, p.id); if (!c) continue;
+      const o = otherEnd(c, s.id, p.id);
+      if (kindOf(dev(o.d)) === 'switch') out.push({ s, sp: p.id, o, c });
+    }
+    return out;
+  },
+  vlanToServer: v => CHK.srvLinks().some(x => carries(x.o, v)),
+  fwSwitch: () => {
+    for (const fw of devsOfKind('fw')) for (const p of CAT.fw.ports) if (p.role === 'lan') {
+      const c = portCable(fw.id, p.id); if (!c) continue;
+      const o = otherEnd(c, fw.id, p.id);
+      if (kindOf(dev(o.d)) === 'switch') return { fw: { d: fw.id, p: p.id }, sw: o };
+    }
+    return null;
+  },
+  fwVlan: v => { const l = CHK.fwSwitch(); return !!(l && carries(l.fw, v) && carries(l.sw, v)); },
+  opLink: () => devsOfKind('router').some(r => CAT.router.ports.some(p => p.role === 'wan' && (c => !!c && kindOf(dev(otherEnd(c, r.id, p.id).d)) === 'odf')(portCable(r.id, p.id)))),
+  wanLink: () => devsOfKind('fw').some(fw => (c => !!c && kindOf(dev(otherEnd(c, fw.id, 'port1').d)) === 'router')(portCable(fw.id, 'port1'))),
+  cmd: c => !!(S.flags.cmds && S.flags.cmds[c]),
+  vty: () => { const r = devsOfKind('router')[0]; return r ? vtyOf(r) : {}; },
+  // nom d'une ACL standard (1-99) qui laisse entrer le réseau ADMIN et lui seul ; celle des lignes VTY en priorité
+  stdAdmin: () => {
+    const r = devsOfKind('router')[0]; if (!r || !r.acl) return null;
+    const ok = n => /^\d+$/.test(n) && +n < 100 && (r.acl.lists[n] || []).length > 0 && vtyPkts().every(k => aclEval(r.acl.lists[n], k).act === k.want);
+    const v = vtyOf(r).acl;
+    return v && ok(v) ? v : Object.keys(r.acl.lists).find(ok) || null;
+  },
+  // tous les ports de switch libres (hors administration) sont éteints
+  unusedOff: () => {
+    let n = 0;
+    for (const sw of devsOfKind('switch')) for (const p of CAT[sw.type].ports) {
+      if (p.role === 'mgmt' || portCable(sw.id, p.id)) continue;
+      n++; if (cfg(sw, p.id).admin) return false;
+    }
+    return n > 0;
+  },
+  // chaque trunk câblé d'un switch a le VLAN natif 999
+  trunksNative: () => {
+    const t = [];
+    for (const sw of devsOfKind('switch')) for (const p of CAT[sw.type].ports) { const c = cfg(sw, p.id); if (portCable(sw.id, p.id) && c.mode === 'trunk') t.push(c); }
+    return t.length > 0 && t.every(c => c.native === 999);
+  },
+  // l'ACL qui compte : celle posée sur un lien opérateur, sinon la plus longue
+  aclTarget: () => {
+    const r = devsOfKind('router')[0]; if (!r || !r.acl) return null;
+    const A = r.acl, wp = CAT.router.ports.find(p => p.role === 'wan' && A.in[p.id] && wanOp(r, p.id));
+    const ext = n => !(/^\d+$/.test(n) && +n < 100); // les ACL standard (lignes VTY) ne comptent pas ici
+    const on = !!(wp && ext(A.in[wp.id]));
+    const name = on ? A.in[wp.id] : Object.keys(A.lists).filter(ext).sort((a, b) => A.lists[b].length - A.lists[a].length)[0];
+    return name ? { r, name, list: A.lists[name] || [], applied: on } : null;
+  },
+  // les paquets types d'une famille reçoivent le traitement voulu (un refus d'usurpation doit venir d'une ligne écrite)
+  aclPk: (kind, want) => {
+    const t = CHK.aclTarget(); if (!t || !t.list.length) return false;
+    const P = aclPkts(1).filter(k => k.k === kind);
+    return P.length > 0 && P.every(k => { const r = aclEval(t.list, k); return r.act === want && (kind !== 'spoof' || r.i >= 0); });
+  },
+};
 const gwGoal = e => { const d = dev(e.d); return kindOf(d) === 'fw' && portDef(d, e.p).role === 'lan'; };
 function blockedText(l, v) {
   const side = !carries(l.me, v) ? l.me : l.other;
@@ -359,6 +426,107 @@ function ruleAllows(src, dst, proto, port) {
 }
 const zoneOfVlan = v => VLANS[v] && VLANS[v].zone;
 
+/* ---------- ACL du routeur de bordure ----------
+   d.acl = { lists: { NOM: [{ seq, act, proto, src, dst, port }] }, in: { 'Te0/0/0': 'NOM' }, t0 }
+   src / dst : 'any', 'host A.B.C.D' ou 'A.B.C.D W.W.W.W' (masque générique). Lecture de haut en bas,
+   la première ligne qui correspond décide, et tout ce qui reste est refusé (deny implicite). */
+const OPS = { 1: { peer: '198.51.100.1', me: '198.51.100.2', as: 3215 }, 2: { peer: '192.0.2.1', me: '192.0.2.2', as: 5410 } };
+const PUB_IP = '203.0.113.10', CLIENT_IP = '82.64.12.34', ATTACK_IP = '185.220.101.42';
+const ACL_PORTS = { www: 80, http: 80, https: 443, bgp: 179, domain: 53, smtp: 25, telnet: 23, ssh: 22, ftp: 21, snmp: 161, ntp: 123 };
+const aclOf = d => d.acl || (d.acl = { lists: {}, in: {}, since: {} });
+const ipInt = ip => { const p = String(ip).split('.').map(Number); return p.length === 4 && p.every(n => Number.isInteger(n) && n >= 0 && n <= 255) ? ((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]) >>> 0 : null; };
+const portsOf = e => e.port ? [].concat(e.port) : [];
+const aclLine = e => `${e.act} ${e.proto} ${e.src} ${e.dst}${e.port ? ' eq ' + portsOf(e).join(' ') : ''}`;
+// Lit « permit tcp any host 203.0.113.10 eq 443 » ; renvoie l'entrée ou un message d'erreur (chaîne)
+function aclParse(text, standard) {
+  const tk = text.trim().toLowerCase().split(/\s+/);
+  let i = 0;
+  const act = tk[i++];
+  if (act !== 'permit' && act !== 'deny') return "% Une ligne commence par permit (autoriser) ou deny (refuser).";
+  let proto = 'ip';
+  if (!standard) { proto = tk[i++]; if (!['ip', 'tcp', 'udp', 'icmp'].includes(proto)) return "% Protocole attendu : ip, tcp, udp ou icmp."; }
+  const addr = what => {
+    const t = tk[i++];
+    if (t === undefined) return { err: `% Il manque la ${what}.` };
+    if (t === 'any') return { v: 'any' };
+    if (t === 'host') { const ip = tk[i++]; return ipInt(ip) === null ? { err: `% Adresse invalide après host : « ${ip || ''} ».` } : { v: 'host ' + ip }; }
+    if (ipInt(t) === null) return { err: `% ${what[0].toUpperCase() + what.slice(1)} invalide : « ${t} ». Exemples : any, host 203.0.113.10, 10.0.0.0 0.255.255.255.` };
+    const w = tk[i];
+    if (w && ipInt(w) !== null) { i++; return { v: t + ' ' + w }; }
+    return { v: 'host ' + t };
+  };
+  const s = addr('source'); if (s.err) return s.err;
+  let dst = 'any', port = null;
+  if (!standard) {
+    const d = addr('destination'); if (d.err) return d.err;
+    dst = d.v;
+    if (tk[i] === 'eq') {
+      if (proto !== 'tcp' && proto !== 'udp') return "% « eq » (un port) ne va qu'avec tcp ou udp.";
+      // IOS accepte jusqu'à 10 ports après eq : « eq 443 22 25 »
+      i++; const ps = [];
+      while (i < tk.length && ps.length < 10) {
+        const p = tk[i], n = /^\d+$/.test(p) ? +p : ACL_PORTS[p];
+        if (!(n >= 1 && n <= 65535)) { if (!ps.length) return `% Port invalide : « ${p || ''} ». Un nombre de 1 à 65535 (ou www, domain, bgp, smtp…).`; break; }
+        ps.push(n); i++;
+      }
+      if (!ps.length) return '% Il manque le port après eq.';
+      port = ps.length === 1 ? ps[0] : ps;
+    }
+  }
+  if (i < tk.length) return `% Mot en trop : « ${tk.slice(i).join(' ')} ».`;
+  return { act, proto, src: s.v, dst, port };
+}
+function aclAddrMatch(a, ip) {
+  if (a === 'any') return true;
+  const x = ipInt(ip), p = a.split(' ');
+  if (p[0] === 'host') return ipInt(p[1]) === x;
+  const net = ipInt(p[0]), wc = ipInt(p[1]);
+  return ((net & ~wc) >>> 0) === ((x & ~wc) >>> 0);
+}
+const aclMatch = (e, k) => (e.proto === 'ip' || e.proto === k.proto) && aclAddrMatch(e.src, k.src) && aclAddrMatch(e.dst, k.dst) && (!e.port || portsOf(e).includes(k.port));
+// Première ligne qui correspond ; i = -1 pour le deny implicite
+function aclEval(list, k) {
+  for (let i = 0; i < list.length; i++) if (aclMatch(list[i], k)) return { act: list[i].act, i, e: list[i] };
+  return { act: 'deny', i: -1 };
+}
+// Paquets types qui arrivent d'Internet sur un lien opérateur, et ce qu'on attend de l'ACL
+function aclPkts(op) {
+  const o = OPS[op || 1], P = [];
+  P.push({ k: 'bgp', name: `Session BGP de l'opérateur ${op || 1} (TCP 179)`, proto: 'tcp', src: o.peer, dst: o.me, port: 179, want: 'permit', w: 2 });
+  const seen = {};
+  for (const cs of S.contracts) {
+    if (cs.state === 'offer') continue;
+    for (const f of contractDef(cs.id).flows) {
+      if (f[0] !== 'Internet' || seen[f[2] + f[3]]) continue;
+      seen[f[2] + f[3]] = true;
+      P.push({ k: 'svc', name: `Client vers ${f[2].toUpperCase()} ${f[3]}`, proto: f[2], src: CLIENT_IP, dst: PUB_IP, port: f[3], want: 'permit', w: 30 });
+    }
+  }
+  P.push({ k: 'spoof', name: 'Source usurpée 10.20.0.10 (adresse privée)', proto: 'tcp', src: '10.20.0.10', dst: PUB_IP, port: 443, want: 'deny', w: 3 });
+  P.push({ k: 'spoof', name: 'Source usurpée 192.168.1.66 (adresse privée)', proto: 'tcp', src: '192.168.1.66', dst: PUB_IP, port: 443, want: 'deny', w: 2 });
+  P.push({ k: 'spoof', name: 'Source usurpée 172.16.8.9 (adresse privée)', proto: 'udp', src: '172.16.8.9', dst: PUB_IP, port: 53, want: 'deny', w: 2 });
+  P.push({ k: 'ssh', name: `SSH vers le routeur depuis Internet (${ATTACK_IP})`, proto: 'tcp', src: ATTACK_IP, dst: o.me, port: 22, want: 'deny', w: 6 });
+  return P;
+}
+// Lignes d'accès à distance du routeur : protocoles acceptés et ACL standard (access-class)
+const vtyOf = d => d.vty || (d.vty = { transport: 'all', acl: null });
+// Qui essaie d'ouvrir une session sur le routeur, et ce qu'on attend d'une ACL standard sur les lignes VTY
+function vtyPkts() {
+  return [
+    { k: 'admin', name: 'Administrateur depuis le VLAN 99 (ADMIN)', proto: 'tcp', src: '10.99.0.50', dst: '10.99.0.2', port: 22, want: 'permit', w: 1 },
+    { k: 'inet', name: `Robot SSH depuis Internet (${ATTACK_IP})`, proto: 'tcp', src: ATTACK_IP, dst: '198.51.100.2', port: 22, want: 'deny', w: 6 },
+    { k: 'srv', name: 'Serveur compromis du VLAN 20 (10.20.0.10)', proto: 'tcp', src: '10.20.0.10', dst: '10.99.0.2', port: 22, want: 'deny', w: 1 },
+  ];
+}
+// ACL appliquée en entrée sur un port du routeur (ou null)
+function aclIn(r, pid) { const A = r.acl; if (!A || !A.in[pid]) return null; return { name: A.in[pid], list: A.lists[A.in[pid]] || [] }; }
+// Opérateur au bout d'un port WAN du routeur (1, 2 ou 0)
+function wanOp(r, pid) {
+  const c = portCable(r.id, pid); if (!c) return 0;
+  const o = otherEnd(c, r.id, pid), od = dev(o.d);
+  return od && kindOf(od) === 'odf' ? portDef(od, o.p).op : 0;
+}
+
 /* ---------- Internet ---------- */
 function computeInternet() {
   const I = { ok: false, why: "Aucun pare-feu sous tension.", cap: 0, path: [], ops: 0 };
@@ -370,22 +538,28 @@ function computeInternet() {
     if (!L.up) { I.why = `Lien WAN de ${fw.host} coupé : ${L.why}.`; continue; }
     const peer = dev(otherEnd(c, fw.id, 'port1').d);
     if (kindOf(peer) !== 'router') { I.why = `Le port WAN de ${fw.host} doit être relié au routeur de bordure.`; continue; }
-    let cap = 0; const wan = [];
+    let cap = 0, aclWhy = ''; const wan = [], wanPorts = [];
     for (const p of CAT[peer.type].ports.filter(x => x.role === 'wan')) {
       const wc = portCable(peer.id, p.id);
       if (!wc || !D.link[wc.id].up) continue;
       const o = dev(otherEnd(wc, peer.id, p.id).d);
       if (kindOf(o) !== 'odf') continue;
-      cap += D.link[wc.id].speed; wan.push(wc.id);
+      // une ACL en entrée qui refuse la session BGP coupe la route par défaut de cet opérateur
+      const a = aclIn(peer, p.id), op = wanOp(peer, p.id);
+      if (a && op && aclEval(a.list, { proto: 'tcp', src: OPS[op].peer, dst: OPS[op].me, port: 179 }).act === 'deny') { aclWhy = `L'ACL ${a.name} appliquée en entrée sur ${p.id} bloque la session BGP (TCP 179) avec l'opérateur ${op} : plus de route vers Internet.`; continue; }
+      cap += D.link[wc.id].speed; wan.push(wc.id); wanPorts.push(p.id);
     }
     if (!cap) {
       const wc = portCable(peer.id, 'Te0/0/0');
-      I.why = wc ? `Aucun lien opérateur actif sur ${peer.host} : ${D.link[wc.id].why || 'lien coupé'}.` : `${peer.host} n'est relié à aucun opérateur.`;
+      I.why = aclWhy || (wc ? `Aucun lien opérateur actif sur ${peer.host} : ${D.link[wc.id].why || 'lien coupé'}.` : `${peer.host} n'est relié à aucun opérateur.`);
       continue;
     }
-    Object.assign(I, { ok: true, why: '', cap: Math.min(cap, L.speed), path: [c.id, ...wan], ops: wan.length, fw: fw.id, rtr: peer.id });
+    Object.assign(I, { ok: true, why: '', cap: Math.min(cap, L.speed), path: [c.id, ...wan], ops: wan.length, fw: fw.id, rtr: peer.id, wanPorts });
     break;
   }
+  // prévient quand l'accès Internet tombe ou revient (ACL, opérateur, câble…)
+  if (S.flags.inetOk !== undefined && S.flags.inetOk !== I.ok) { logEvent(I.ok ? 'Accès Internet actif.' : `Accès Internet coupé : ${I.why}`, I.ok ? 'good' : 'bad'); if (typeof onInternet === 'function') onInternet(I); }
+  S.flags.inetOk = I.ok;
   D.inet = I;
 }
 
@@ -438,7 +612,11 @@ function vmEval(vm) {
       if (cabled.length) add(1, 'down', `Les liens de ${host.host} sont coupés : ${D.link[cabled[0].id].why}.`);
       else add(1, 'down', `Aucune carte réseau de données de ${host.host} n'est câblée (eno1, eno2, ens1f0, ens1f1).`);
     } else if (vm.isolated) add(2, 'down', `${vm.name} est isolée du réseau (carte virtuelle déconnectée).`);
-    else if (VLANS[v].gw) {
+    else if (vm.k && contractDef(vm.k).lanOnly) {
+      // service purement interne : il suffit que le port du switch amène le VLAN de la VM
+      const first = data.filter(l => !carries(l.other, v));
+      if (first.length === data.length) add(2, 'down', `${first[0].other.p} de ${nameOf(dev(first[0].other.d))} est en ${portModeText(first[0].other)} : la VM attend le VLAN ${v} (${VLANS[v].name}).`);
+    } else if (VLANS[v].gw) {
       const r = l2Search(host.id, p => portDef(host, p).role !== 'bmc', v, gwGoal);
       if (!r.ok) {
         const first = data.filter(l => !carries(l.other, v));
@@ -451,7 +629,7 @@ function vmEval(vm) {
     if (S.flags.ipdup && S.flags.ipdup.ip === vm.ip) add(3, 'deg', `Conflit d'adresse IP : une autre machine répond aussi sur ${vm.ip}.`);
   }
   // flux
-  const def = contractDef(vm.k), zone = zoneOfVlan(v);
+  const def = vm.k ? contractDef(vm.k) : null, zone = zoneOfVlan(v);
   if (def) {
     for (const f of def.flows) {
       const mine = (f[1] === zone && s.ports.some(p => p[0] === f[2] && p[1] === f[3])) || (f[0] === zone && (vm.svc === 'mon' || vm.svc === 'bak'));
@@ -460,6 +638,14 @@ function vmEval(vm) {
     }
   }
   if (s.pub && !D.inet.ok) add(1, 'down', `Pas d'accès Internet : ${D.inet.why}`);
+  else if (s.pub) {
+    // l'ACL du routeur filtre avant le pare-feu : le service doit y être autorisé sur au moins un lien actif
+    const rtr = dev(D.inet.rtr), acls = D.inet.wanPorts.map(p => aclIn(rtr, p) && { p, a: aclIn(rtr, p) }).filter(Boolean);
+    if (acls.length && acls.length === D.inet.wanPorts.length) for (const [proto, port] of s.ports) {
+      const R0 = acls.map(x => ({ x, r: aclEval(x.a.list, { proto, src: CLIENT_IP, dst: PUB_IP, port }) }));
+      if (R0.every(y => y.r.act === 'deny')) { const y = R0[0]; add(4, 'down', `L'ACL ${y.x.a.name} du routeur (entrée ${y.x.p}) refuse ${proto.toUpperCase()} ${port} vers ${PUB_IP} : ${y.r.i < 0 ? "aucune ligne ne l'autorise (deny implicite)" : `la ligne ${y.r.e.seq} « ${aclLine(y.r.e)} » le refuse`}.`); }
+    }
+  }
   // application
   if (s.cert && vm.st === 'running' && vm.cert < S.t) add(7, 'down', `Le certificat TLS de ${vm.name} a expiré : les navigateurs refusent la connexion.`);
   if (vm.fill >= 1) add(7, 'down', `Le disque de ${vm.name} est plein (100 %) : le service ne peut plus écrire.`);
@@ -545,6 +731,7 @@ function contractEval(cs) {
     if (req.anti && list.length > 1 && new Set(list.map(v => v.host)).size < list.length) add('down', `Les VM « ${SVC[req.s].name} » doivent être sur des hôtes différents (anti-affinité) : une seule panne couperait tout.`);
     if (req.antiRack && list.length > 1 && new Set(list.map(v => dev(v.host) ? dev(v.host).rack : -1)).size < list.length) add('down', `Les VM « ${SVC[req.s].name} » doivent être dans des baies différentes : une panne d'alimentation ou de switch d'une baie ne doit pas tout couper.`);
   }
+  for (const g of def.goals || []) if (!g.ok()) add('todo', g.t);
   for (const v of vms) for (const r of D.vm[v.id].R) add(r.sev, `${v.name} · couche ${r.lvl} : ${r.msg}`);
   for (const [a, b] of def.deps || []) {
     const aOk = vms.filter(v => v.svc === a && D.vm[v.id].st !== 'down').length;
@@ -559,16 +746,17 @@ function contractEval(cs) {
 function computeContracts() {
   D.ct = {};
   for (const cs of S.contracts) {
-    if (cs.state === 'offer') continue;
+    if (cs.state === 'offer' || (cs.state === 'active' && contractDef(cs.id).mission)) continue;
     const r = contractEval(cs);
     D.ct[cs.id] = r;
-    if (cs.state === 'setup' && r.st === 'ok' && !cs.readyLog) { cs.readyLog = true; logEvent(`Contrat « ${contractDef(cs.id).client} » prêt : lance la recette pour le mettre en service.`, 'good'); }
+    if (cs.state === 'setup' && r.st === 'ok' && !cs.readyLog) { cs.readyLog = true; logEvent(contractDef(cs.id).mission ? `Mission « ${contractDef(cs.id).client} » terminée : valide-la dans le panneau Contrats.` : `Contrat « ${contractDef(cs.id).client} » prêt : lance la recette pour le mettre en service.`, 'good'); }
   }
-  const mon = S.contracts.find(c => c.id === 'c4' && c.state === 'active');
+  const fx = e => S.contracts.some(c => c.state === 'active' && contractDef(c.id).effect === e);
+  const mon = fx('monitoring');
   const monVm = S.vms.find(v => v.svc === 'mon');
   D.monitoring = !!(mon && monVm && D.vm[monVm.id] && D.vm[monVm.id].st !== 'down');
   const bak = S.vms.find(v => v.svc === 'bak');
-  D.backup = !!(bak && S.contracts.some(c => c.id === 'c6' && c.state === 'active') && D.vm[bak.id] && D.vm[bak.id].st !== 'down');
+  D.backup = !!(bak && fx('backup') && D.vm[bak.id] && D.vm[bak.id].st !== 'down');
 }
 function activateContract(cs) {
   const def = contractDef(cs.id);
@@ -693,7 +881,7 @@ function simStep(dt) {
   // argent
   let rev = 0;
   for (const cs of S.contracts) {
-    if (cs.state !== 'active') continue;
+    if (cs.state !== 'active' || !D.ct[cs.id]) continue; // une mission réussie ne rapporte plus rien
     const def = contractDef(cs.id), r = D.ct[cs.id];
     cs.tot = (cs.tot || 0) + dt;
     if (r.st === 'ok') { cs.up = (cs.up || 0) + dt; rev += def.rev; }

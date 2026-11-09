@@ -204,6 +204,33 @@ const FICHES = [
       { q: "Un port passe en err-disabled juste après le branchement d'un petit switch. Quelle fonction a réagi ?", o: ['BPDU Guard', 'Port Security', 'DHCP Snooping', 'NTP'], a: 0, e: "Le petit switch envoie des BPDU Spanning Tree." },
       { q: "Comment relancer un port err-disabled ?", o: ['Retirer la cause, puis shutdown et no shutdown', 'Redémarrer le serveur', 'Changer de VLAN', 'Attendre'], a: 0, e: "Sans retirer la cause, le port retombe aussitôt." },
       { q: "Que faire des ports inutilisés ?", o: ['Les couper et les mettre dans un VLAN poubelle', 'Les laisser en VLAN 1', 'Les passer en trunk', 'Les mettre en DMZ'], a: 0, e: "Un port actif dans le VLAN 1 est une porte ouverte." }] },
+  { id: 'acl', title: 'ACL : filtrer sur le routeur', vault: 'Cisco - ACL NAT Sécurité', html: `
+<p>Une <b>ACL</b> (liste de contrôle d'accès) est une liste de lignes <code>permit</code> (autoriser) ou <code>deny</code> (refuser) qu'un routeur applique aux paquets qui passent par une interface.</p>
+<table><tr><th></th><th>ACL standard</th><th>ACL étendue</th></tr>
+<tr><td>Numéros</td><td>1 à 99</td><td>100 à 199, ou un nom</td></tr>
+<tr><td>Critères</td><td>adresse source seule</td><td>protocole, source, destination, port</td></tr>
+<tr><td>Où la poser</td><td>près de la destination</td><td>près de la source</td></tr></table>
+<p><b>Trois règles d'or.</b> 1) Lecture de haut en bas : la <b>première</b> ligne qui correspond décide, les suivantes sont ignorées. 2) À la fin, un <code>deny ip any any</code> <b>implicite</b> refuse tout le reste. 3) Une ACL ne filtre rien tant qu'elle n'est pas appliquée sur une interface : <code>ip access-group NOM in</code>.</p>
+<p><b>Masque générique</b> (wildcard) : l'inverse du masque. <code>255.255.255.0</code> donne <code>0.0.0.255</code>. Un bit à 0 est vérifié, un bit à 1 est ignoré. <code>host 10.0.0.1</code> vaut <code>10.0.0.1 0.0.0.0</code>, et <code>any</code> vaut <code>0.0.0.0 255.255.255.255</code>.</p>
+<pre>ip access-list extended EDGE-IN
+ 10 deny   ip 10.0.0.0 0.255.255.255 any
+ 20 deny   ip 172.16.0.0 0.15.255.255 any
+ 30 deny   ip 192.168.0.0 0.0.255.255 any
+ 40 permit tcp host 198.51.100.1 host 198.51.100.2 eq bgp
+ 50 permit tcp any host 203.0.113.10 eq 443
+interface Te0/0/0
+ ip access-group EDGE-IN in</pre>
+<p><b>Dans le datacenter</b>, l'ACL du routeur de bordure fait un premier tri <b>sans état</b> : elle jette les adresses privées usurpées (anti-spoofing, RFC 1918) et l'administration du routeur depuis Internet. Le pare-feu, <b>avec état</b>, fait ensuite le filtrage fin. Attention : une ACL en entrée filtre aussi ce que l'opérateur envoie, comme la session <b>BGP (TCP 179)</b>. L'oublier coupe Internet.</p>
+<p><b>ACL standard sur les lignes VTY.</b> Pour que seuls les administrateurs ouvrent une session sur le routeur : <code>access-list 10 permit 10.99.0.0 0.0.0.255</code>, puis <code>line vty 0 4</code>, <code>transport input ssh</code> (Telnet circule en clair) et <code>access-class 10 in</code>. Sur une ligne VTY, on applique l'ACL avec <code>access-class</code> ; sur une interface, avec <code>ip access-group</code>.</p>
+<p><b>Plusieurs ports d'un coup.</b> Après <code>eq</code>, IOS accepte jusqu'à 10 ports : <code>permit tcp any host 203.0.113.10 eq 443 22 25</code>.</p>
+<p>Vérifier : <code>show access-lists</code> affiche chaque ligne et son nombre de correspondances (matches).</p>`,
+    retenir: "Lue de haut en bas, la première ligne qui correspond décide, et un deny ip any any implicite termine toute ACL. Étendue (100-199 ou nommée) : protocole, source, destination, port, posée près de la source. Masque générique 0.0.0.255 pour un /24. Sur une interface : ip access-group NOM in ; sur les lignes VTY : access-class N in.",
+    quiz: [
+      { q: "Une ACL contient « permit tcp any any eq 443 » puis « deny ip 10.0.0.0 0.255.255.255 any ». Un paquet TCP 443 venant de 10.1.1.1 est…", o: ['Autorisé : la première ligne correspond', 'Refusé : la ligne deny est plus précise', 'Refusé par le deny implicite', 'Ignoré par le routeur'], a: 0, e: "Le routeur s'arrête à la première ligne qui correspond. Les deny anti-usurpation se placent donc en tête." },
+      { q: "Quel masque générique désigne le réseau 172.16.0.0/12 ?", o: ['0.15.255.255', '255.240.0.0', '0.0.255.255', '0.31.255.255'], a: 0, e: "/12 donne le masque 255.240.0.0 ; son inverse octet par octet est 0.15.255.255." },
+      { q: "Pour que seul le réseau 10.99.0.0/24 puisse ouvrir une session SSH sur le routeur, quelle commande pose l'ACL 10 sur les lignes VTY ?", o: ['access-class 10 in', 'ip access-group 10 in', 'access-list 10 in', 'transport input 10'], a: 0, e: "Sur line vty, c'est access-class. ip access-group sert sur une interface." },
+      { q: "Tu appliques en entrée, sur le lien opérateur, une ACL qui n'autorise que TCP 443. Que se passe-t-il ?", o: ["La session BGP (TCP 179) est refusée et Internet tombe", 'Rien : BGP passe toujours', 'Seul HTTPS est accéléré', 'Le pare-feu reprend BGP à sa place'], a: 0, e: "Le deny implicite refuse aussi le trafic de l'opérateur : il faut une ligne permit pour BGP." },
+    ] },
   { id: 'froid', title: 'Refroidissement et PUE', vault: 'Bases de l’informatique (chaleur)', html: `
 <p>Presque toute l'électricité consommée par un serveur devient de la <b>chaleur</b>. L'air froid entre en face avant, ressort chaud à l'arrière.</p>
 <p>Recommandation ASHRAE : air d'entrée entre <b>18 et 27 °C</b>. Au-delà, les serveurs réduisent leur fréquence, puis s'arrêtent pour se protéger.</p>
@@ -324,6 +351,13 @@ const FICHES = [
       { q: "Qui doit pouvoir joindre l'API Kubernetes (6443) ?", o: ["Uniquement l'administration", 'Tout Internet', 'La DMZ', 'Le stockage'], a: 0, e: "L'API pilote tout le cluster : on la protège comme un accès administrateur." },
       { q: "Pourquoi trois nœuds dans trois baies ?", o: ["Pour qu'une baie en panne ne coupe pas le service", 'Pour aller plus vite', 'Pour économiser', 'Parce que Kubernetes l’impose'], a: 0, e: "Une baie partage une alimentation et un switch : c'est un domaine de panne." }] },
 ];
+// Les fiches suivent l'ordre où les contrats les introduisent (la recette arrive avec le premier contrat client)
+(() => {
+  const order = [];
+  for (const c of CONTRACTS) { for (const n of c.notions) if (!order.includes(n)) order.push(n); if (!c.mission && !order.includes('recette')) order.push('recette'); }
+  const rank = id => { const i = order.indexOf(id); return i < 0 ? 999 : i; };
+  FICHES.sort((x, y) => rank(x.id) - rank(y.id));
+})();
 const FICHE = id => FICHES.find(f => f.id === id);
 
 /* =========================================================
@@ -627,7 +661,8 @@ const INCIDENTS = {
       ['Obturateurs, confinement et répartition de la charge entre les baies', 'Retirer les obturateurs', 'Mettre les serveurs en face arrière', 'Couper la supervision']),
   },
 };
-const TEACH = { c1: ['psu'], c2: ['disk', 'scan'], c3: ['crc', 'duplex'], c4: ['rogue', 'feed'], c5: ['ddos', 'oom', 'crac'], c6: ['ransom', 'full', 'edf'], c7: ['brute', 'sfp'], c8: ['op', 'ipdup'] };
+// Pannes introduites après chaque contrat : elles font pratiquer la notion qu'il vient d'apprendre
+const TEACH = { c1: ['psu'], c2: ['crc', 'duplex'], c3: ['disk', 'oom'], c4: ['sfp'], c5: ['scan'], c6: ['ddos'], c7: ['ipdup', 'full'], c8: ['feed'], c9: ['ransom', 'edf'], c10: ['rogue'], c11: ['crac'], c12: ['brute'], c15: ['op'] };
 function switchEnd(c) { for (const e of [c.a, c.b]) if (kindOf(dev(e.d)) === 'switch') return e; return c.a; }
 
 /* ---------- Tickets ---------- */
@@ -695,8 +730,10 @@ function incidentTick(dt) {
     let type = null, ctx = null;
     while (S.teach.length && !ctx) { type = S.teach.shift(); ctx = INCIDENTS[type].pick(); }
     if (!ctx) {
-      const pool = ['psu', 'disk', 'crc', 'sfp', 'duplex', 'rogue', 'ddos', 'scan', 'brute', 'oom', 'full', 'ipdup', 'feed', 'crac', 'op', 'ransom', 'edf'];
-      for (let k = 0; k < 8 && !ctx; k++) { type = pick(pool); ctx = INCIDENTS[type].pick(); }
+      // seules reviennent au hasard les pannes déjà rencontrées, pour garder une difficulté progressive
+      const pool = S.contracts.filter(c => c.state === 'active').flatMap(c => TEACH[c.id] || []);
+
+      for (let k = 0; k < 8 && !ctx && pool.length; k++) { type = pick(pool); ctx = INCIDENTS[type].pick(); }
     }
     if (ctx) raiseIncident(type, ctx);
     S.nextInc = S.t + 240 + Math.random() * 300;
@@ -719,7 +756,7 @@ function onContractActive(cs) {
   if (list) { S.teach.push(...list); S.nextInc = Math.min(S.nextInc, S.t + 90); }
 }
 function learnHook(ev, a) {
-  const map = { place: d => ({ switch: 'switch', server: 'virtu', nas: 'raid', blank: 'froid', fw: 'pf' }[kindOf(d)]), cable: c => CABLES[c.type].ends === 'fiber' || c.type === 'dac' ? 'fibre' : 'cuivre', rule: () => 'pf', deploy: v => ({ ad: 'ad', k8s: 'k8s' }[v.svc] || 'ip'), portcfg: () => 'switch', rack: () => 'salle', inrow: () => 'froid', crac: () => 'froid' };
+  const map = { place: d => ({ switch: 'switch', server: 'virtu', nas: 'raid', blank: 'froid', fw: 'pf' }[kindOf(d)]), cable: c => CABLES[c.type].ends === 'fiber' || c.type === 'dac' ? 'fibre' : 'cuivre', rule: () => 'pf', deploy: v => ({ ad: 'ad', k8s: 'k8s' }[v.svc] || 'ip'), portcfg: () => 'switch', acl: () => 'acl', rack: () => 'salle', inrow: () => 'froid', crac: () => 'froid' };
   const id = map[ev] && map[ev](a);
   if (id && !S.codex.seen[id]) { S.codex.seen[id] = true; if (typeof onFiche === 'function') onFiche(FICHE(id)); }
 }
@@ -734,7 +771,8 @@ function recetteTests(cs) {
   for (const v of vms) {
     const s = SVC[v.svc], r = st(v), gw = VLANS[v.vlan].gw;
     const net = !r.R.some(x => x.sev === 'down' && x.lvl <= 3);
-    if (gw) T.push({ who: v.name, cmd: `ping -c 3 ${gw}`, ok: net, out: net ? '3 packets transmitted, 3 received, 0% packet loss' : `100% packet loss. ${first(v)}` });
+    if (def.lanOnly) T.push({ who: `poste du client (VLAN ${v.vlan})`, cmd: `ping -c 3 ${v.ip}`, ok: net, out: net ? "3 packets transmitted, 3 received, 0% packet loss" : `100% packet loss. ${first(v)}` });
+    else if (gw) T.push({ who: v.name, cmd: `ping -c 3 ${gw}`, ok: net, out: net ? "3 packets transmitted, 3 received, 0% packet loss" : `100% packet loss. ${first(v)}` });
     const ok = r.st !== 'down';
     if (s.pub) for (const [proto, port] of s.ports) T.push({ who: 'sonde Internet', cmd: `nmap -Pn ${proto === 'udp' ? '-sU ' : ''}-p ${port} ${pubIp}`, ok, out: ok ? `${port}/${proto} open` : `${port}/${proto} filtered. ${first(v)}` });
     const app = {
@@ -745,7 +783,7 @@ function recetteTests(cs) {
       bak: ["echo 'status storage' | bconsole", 'Device "FileStorage" is mounted'], ad: [`ldapsearch -H ldap://${v.ip} -x -s base namingContexts`, 'namingContexts: DC=agences,DC=local'],
       k8s: ['kubectl get nodes', `${v.name}   Ready   worker   v1.31`],
     }[v.svc];
-    if (app) T.push({ who: ['db', 'ad', 'k8s'].includes(v.svc) ? 'depuis la DMZ' : v.name, cmd: app[0], ok, out: ok ? app[1] : first(v) || 'échec' });
+    if (app) T.push({ who: def.lanOnly ? `poste du client (VLAN ${v.vlan})` : ['db', 'ad', 'k8s'].includes(v.svc) ? 'depuis la DMZ' : v.name, cmd: app[0], ok, out: ok ? app[1] : first(v) || 'échec' });
   }
   const R = D.ct[cs.id] ? D.ct[cs.id].R.filter(x => !x.msg.includes(' · couche ') && x.sev !== 'info') : [];
   for (const x of R) T.push({ who: 'exigences du contrat', cmd: '# vérification', ok: false, out: x.msg });

@@ -56,6 +56,9 @@ function cmdList(tg) {
   } else if (k === 'router') {
     chip('show ip interface brief', 'Interfaces et adresses');
     chip('show bgp summary', 'Sessions BGP opérateurs');
+    chip('show access-lists', 'ACL et compteurs');
+    chip('show ip ssh', 'Accès SSH et lignes VTY');
+    alt('show ip access-lists');
     chip('show interfaces Te0/0/0', 'Lien opérateur 1');
     chip('show interfaces transceiver', 'Puissance optique');
     chip('show logging', 'Journal Syslog');
@@ -91,7 +94,10 @@ function matchCommand(tg, input) {
   if (exact) return exact;
   const tk = norm.toLowerCase().split(' ');
   const m = list.filter(c => { const ct = c.toLowerCase().split(' '); return ct.length === tk.length && ct.every((t, i) => t.startsWith(tk[i])); });
-  return m.length === 1 ? m[0] : null;
+  if (m.length === 1) return m[0];
+  // « gi1/0/2 » désigne Gi1/0/2, pas Gi1/0/20 : on garde les candidats dont le dernier mot est exact
+  const ex = m.filter(c => c.toLowerCase().split(' ').pop() === tk[tk.length - 1]);
+  return ex.length === 1 ? ex[0] : null;
 }
 function runCommand(tg, input) {
   const norm = input.trim().replace(/\s+/g, ' ');
@@ -234,6 +240,13 @@ function devCmd(d, c) {
     out.push(pad('Interface', 23) + pad('IP-Address', 16) + pad('OK?', 4) + pad('Method', 7) + pad('Status', 22) + 'Protocol');
     const ips = { 'Te0/0/0': '198.51.100.2', 'Te0/0/1': '192.0.2.2', 'Te0/1/0': '203.0.113.1', 'Te0/1/1': 'unassigned', Gi0: '10.99.0.2' };
     for (const p of ports) { const st = portState(d, p); out.push(pad(p.id, 23) + pad(ips[p.id] || 'unassigned', 16) + pad('YES', 4) + pad('NVRAM', 7) + pad(st.up ? 'up' : 'down', 22) + (st.up ? 'up' : 'down')); }
+  } else if (c === 'show ip ssh') {
+    const v = vtyOf(d);
+    out.push('SSH Enabled - version 2.0', 'Authentication methods: publickey, keyboard-interactive, password', 'Authentication timeout: 120 secs; Authentication retries: 3', '',
+      `! line vty 0 4 : transport input ${v.transport === 'all' ? 'telnet ssh' : v.transport}${v.transport === 'ssh' ? '' : '  (Telnet accepté : les mots de passe circulent en clair)'}`,
+      `! access-class : ${v.acl ? v.acl + ' in' : 'aucune  (tout Internet peut tenter sa chance)'}`);
+  } else if (c === 'show access-lists' || c === 'show ip access-lists') {
+    out.push(...aclShow(d));
   } else if (c === 'show bgp summary') {
     out.push('BGP router identifier 203.0.113.1, local AS number 64512', 'BGP table version is 42, main routing table version 42', '',
       pad('Neighbor', 16) + pad('V', 4) + pad('AS', 7) + pad('MsgRcvd', 9) + pad('MsgSent', 9) + pad('Up/Down', 10) + 'State/PfxRcd');
@@ -403,4 +416,331 @@ function vmCmd(v, c) {
     else out.push('clients.csv  factures_2026.ods  base.sql  photos.tar');
   } else return `% ${c} : commande non disponible.`;
   return out.join('\n');
+}
+
+/* =========================================================
+   Mode configuration façon Cisco IOS (onglet CLI des fenêtres)
+   exec (#) → configure terminal → (config)# → interface → (config-if)#
+   ========================================================= */
+const CLIM = {};
+let CLI_SELF = false;
+function cliState(d) { return CLIM[d.id] || (CLIM[d.id] = { mode: 'exec', ifs: [], acl: null }); }
+const isIOS = d => ['switch', 'router'].includes(kindOf(d));
+function cliPrompt(d) {
+  const st = cliState(d);
+  if (!isIOS(d) || st.mode === 'exec') return promptOf({ d: d.id });
+  if (st.mode === 'config') return `${d.host}(config)#`;
+  if (st.mode === 'acl') return `${d.host}(config-ext-nacl)#`;
+  if (st.mode === 'line') return `${d.host}(config-line)#`;
+  return `${d.host}(config-if${st.ifs.length > 1 ? '-range' : ''})#`;
+}
+// « gi1/0/1 », « g1/0/1 », « GigabitEthernet1/0/1 » et « te1/1/1 » désignent un port ; « gi1/0/1-4 » une plage
+function findPorts(d, txt) {
+  const t = txt.replace(/\s+/g, '').toLowerCase();
+  const m = t.match(/^([a-z-]*)(\d+(?:\/\d+)*)(?:-(\d+))?$/);
+  if (!m) return [];
+  const [, pre, num, last] = m;
+  const base = num.split('/'), lo = +base[base.length - 1], hi = last ? +last : lo;
+  const out = [];
+  for (const p of CAT[d.type].ports) {
+    const pm = p.id.match(/^([A-Za-z-]+)([\d/]+)$/); if (!pm) continue;
+    const pnum = pm[2].split('/');
+    if (pnum.length !== base.length || pnum.slice(0, -1).join('/') !== base.slice(0, -1).join('/')) continue;
+    const n = +pnum[pnum.length - 1]; if (n < lo || n > hi) continue;
+    if (pre && !longIf(p.id).toLowerCase().startsWith(pre) && !p.id.toLowerCase().startsWith(pre)) continue;
+    out.push(p.id);
+  }
+  return out;
+}
+function vlanList(txt, cur) {
+  const t = txt.trim().toLowerCase();
+  if (t === 'all') return VLAN_IDS.filter(v => v !== 1);
+  if (t === 'none') return [];
+  let mode = 'set', rest = t;
+  const mm = t.match(/^(add|remove|except)\s+(.+)$/); if (mm) { mode = mm[1]; rest = mm[2]; }
+  const ids = [];
+  for (const part of rest.split(',')) {
+    const r = part.trim().match(/^(\d+)(?:-(\d+))?$/); if (!r) return null;
+    for (let v = +r[1]; v <= +(r[2] || r[1]); v++) ids.push(v);
+  }
+  const bad = ids.filter(v => !VLAN_IDS.includes(v));
+  if (bad.length) return { bad };
+  const all = VLAN_IDS.filter(v => v !== 1);
+  const res = mode === 'add' ? [...new Set([...cur, ...ids])] : mode === 'remove' ? cur.filter(v => !ids.includes(v)) : mode === 'except' ? all.filter(v => !ids.includes(v)) : ids;
+  return res.filter(v => v !== 1).sort((a, b) => a - b);
+}
+// Grammaire : mot-clé (abrégeable), {a|b} choix, <n> nombre, <rest> fin de ligne, <rest?> fin facultative
+const IF_CMDS = [
+  { p: 'shutdown', h: 'éteindre le port', f: () => ({ admin: false }) },
+  { p: 'no shutdown', h: 'allumer le port', f: () => ({ admin: true }) },
+  { p: 'switchport mode {access|trunk}', h: 'access : un seul VLAN · trunk : plusieurs VLAN étiquetés', f: (a, c) => a[0] === 'trunk' && !c.allowed.length ? { mode: 'trunk', allowed: VLAN_IDS.filter(v => v !== 1) } : { mode: a[0] } },
+  { p: 'switchport access vlan <n>', h: 'VLAN du port en mode access', f: a => VLAN_IDS.includes(a[0]) ? { vlan: a[0] } : `% VLAN ${a[0]} absent du plan d'adressage (VLAN ${VLAN_IDS.join(', ')})` },
+  { p: 'switchport trunk allowed vlan <rest>', h: 'VLAN du trunk : 10,20,99 · add 30 · remove 30', f: (a, c) => { const l = vlanList(a[0], c.allowed); return !l ? '% Liste de VLAN illisible. Exemple : switchport trunk allowed vlan 10,20,99' : l.bad ? `% VLAN ${l.bad.join(', ')} absent du plan d'adressage` : { allowed: l }; } },
+  { p: 'switchport trunk native vlan <n>', h: 'VLAN natif (non étiqueté) : 999 recommandé', f: a => [1, 999].includes(a[0]) ? { native: a[0] } : '% Dans cette salle, le VLAN natif est 1 (déconseillé) ou 999 (dédié)' },
+  { p: 'switchport nonegotiate', h: 'désactive DTP (négociation du trunk)', f: () => ({}) },
+  { p: 'speed {auto|100|1000}', h: 'vitesse du port cuivre', rj: true, f: a => ({ speed: a[0] }) },
+  { p: 'duplex {auto|full|half}', h: 'duplex : les deux bouts doivent être pareils', rj: true, f: a => ({ duplex: a[0] }) },
+  { p: 'spanning-tree portfast', h: 'forwarding immédiat (ports vers des serveurs)', f: () => ({}) },
+  { p: 'spanning-tree bpduguard enable', h: 'coupe le port si un switch y est branché', f: () => ({ bpdu: true }) },
+  { p: 'no spanning-tree bpduguard enable', h: 'retire BPDU Guard', f: () => ({ bpdu: false }) },
+  { p: 'switchport port-security <rest?>', h: 'limite le nombre d’adresses MAC du port', f: () => ({ psec: true }) },
+  { p: 'no switchport port-security', h: 'retire Port Security', f: () => ({ psec: false }) },
+  { p: 'description <rest>', h: 'note libre : à quoi sert ce port', f: a => ({ desc: a[0].slice(0, 24) }) },
+  { p: 'no description', h: 'efface la description', f: () => ({ desc: '' }) },
+];
+const CONF_CMDS = [
+  { p: 'interface <rest>', h: 'entrer dans un port : interface Gi1/0/1' },
+  { p: 'interface range <rest>', h: 'plusieurs ports : interface range Gi1/0/1-4' },
+  { p: 'vlan <n>', h: 'vérifier qu’un VLAN existe', sw: true },
+  { p: 'ip access-list extended <rest>', h: 'créer ou modifier une ACL nommée', rt: true },
+  { p: 'no ip access-list extended <rest>', h: 'supprimer une ACL nommée', rt: true },
+  { p: 'access-list <n> <rest>', h: 'ACL numérotée : 1-99 standard, 100-199 étendue', rt: true },
+  { p: 'no access-list <n>', h: 'supprimer une ACL numérotée', rt: true },
+  { p: 'line vty <rest>', h: 'lignes d’accès à distance : line vty 0 4', rt: true },
+  { p: 'hostname <rest>', h: 'nom de l’équipement' },
+];
+function matchGrammar(list, input) {
+  const tk = input.split(' ');
+  const hits = [];
+  for (const c of list) {
+    const pt = c.p.split(' '), args = []; let ok = true, exact = true, i = 0;
+    for (let j = 0; j < pt.length && ok; j++) {
+      const p = pt[j];
+      if (p === '<rest>' || p === '<rest?>') { const r = tk.slice(i).join(' '); if (!r && p === '<rest>') ok = false; args.push(r); i = tk.length; continue; }
+      const t = tk[i++]; if (t === undefined) { ok = false; break; }
+      if (p === '<n>') { if (/^\d+$/.test(t)) args.push(+t); else ok = false; }
+      else if (p[0] === '{') { const all = p.slice(1, -1).split('|'), o = all.includes(t) ? [t] : all.filter(x => x.startsWith(t)); if (o.length === 1) args.push(o[0]); else ok = false; }
+      else if (p.startsWith(t)) { if (p !== t) exact = false; }
+      else ok = false;
+    }
+    if (ok && i === tk.length) hits.push({ c, args, exact, n: pt.length });
+  }
+  if (hits.length <= 1) return hits[0] || null;
+  const ex = hits.filter(h => h.exact); if (ex.length === 1) return ex[0];
+  // « interface range … » l'emporte sur « interface <rest> »
+  const max = Math.max(...hits.map(h => h.n)), top = hits.filter(h => h.n === max);
+  return top.length === 1 ? top[0] : { ambiguous: true };
+}
+function cliHelp(d) {
+  const st = cliState(d), row = (a, b) => `  ${pad(a, 40)}${b}`;
+  if (st.mode === 'if' && kindOf(d) !== 'router') return 'Commandes d’une interface :\n' + IF_CMDS.map(c => row(c.p.replace(/[{}]/g, '').replace(/\|/g, '/').replace(/ <rest\?>/, '').replace('<n>', 'N').replace('<rest>', '…'), c.h)).join('\n') + '\n' + row('exit / end', 'revenir en arrière / au mode privilégié') + '\n' + row('do show …', 'lancer une commande show sans quitter');
+  if (st.mode === 'acl') return `ACL ${st.acl} : chaque ligne est lue de haut en bas, la première qui correspond décide.\n` + [
+    ['permit|deny PROTO SOURCE DESTINATION [eq PORT]', 'ajoute une ligne à la fin (numéro +10)'], ['N permit|deny …', 'insère une ligne au numéro N (ex. 15)'], ['no N', 'supprime la ligne N'],
+    ['PROTO', 'ip (tout), tcp, udp, icmp'], ['SOURCE / DESTINATION', 'any · host 203.0.113.10 · 10.0.0.0 0.255.255.255'], ['exit / end', 'revenir en arrière / au mode privilégié'], ['do show access-lists', 'voir l’ACL et ses compteurs']].map(x => row(x[0], x[1])).join('\n') + '\n! À la fin, un « deny ip any any » invisible refuse tout le reste.';
+  if (st.mode === 'line') return 'Lignes d’accès à distance (VTY 0 à 4) :\n' + LINE_CMDS.map(c => row(c.p.replace(' <rest>', ' …'), c.h)).join('\n') + '\n' + row('exit / end', 'revenir en arrière / au mode privilégié');
+  if (st.mode === 'if' && kindOf(d) === 'router') return 'Commandes d’une interface du routeur :\n' + RIF_CMDS.map(c => row(c.p.replace(' <rest>', ' NOM in'), c.h)).join('\n') + '\n' + row('exit / end', 'revenir en arrière / au mode privilégié');
+  if (st.mode === 'config') return 'Mode configuration globale :\n' + confCmds(d).map(c => row(c.p.replace(' <rest>', ' …').replace(' <n>', ' N'), c.h)).join('\n') + '\n' + row('end', 'revenir au mode privilégié') + '\n' + row('do show …', 'lancer une commande show');
+  return runCommand({ d: d.id }, 'help') + (isIOS(d) ? '\nPour configurer : « configure terminal » (abrégé « conf t »).' : '');
+}
+// Exécute une ligne et renvoie le texte à afficher. Les réglages passent par les mêmes actions que les formulaires.
+function cliRun(d, input) {
+  const raw = input.trim().replace(/\s+/g, ' ');
+  if (!raw) return '';
+  const low = raw.toLowerCase(), st = cliState(d);
+  if (low === '?' || low === 'help') return cliHelp(d);
+  if (!isIOS(d)) {
+    if (/^(conf|configure|interface|int |switchport|vlan )/.test(low)) return kindOf(d) === 'fw' ? '% Ce pare-feu tourne sous Linux (nftables) : ses règles se règlent dans l’onglet Config. Ici, les commandes de diagnostic (help).' : '% Cet équipement se règle dans l’onglet Config. Ici, les commandes de diagnostic (help).';
+    return runCommand({ d: d.id }, raw);
+  }
+  if (low === 'end' || low === '^z') { st.mode = 'exec'; st.ifs = []; st.acl = null; return ''; }
+  if (low === 'exit') { if (st.mode === 'if' || st.mode === 'acl' || st.mode === 'line') { st.mode = 'config'; st.ifs = []; st.acl = null; } else st.mode = 'exec'; return ''; }
+  if (/^en(a|ab|abl|able)?$/.test(low)) return '';
+  if (st.mode !== 'exec' && low.startsWith('do ')) return runCommand({ d: d.id }, raw.slice(3));
+  if (st.mode === 'exec') {
+    if (/^conf(i|ig|igu|igur|igure)?( t(e|er|erm|ermi|ermin|ermina|erminal)?)?$/.test(low)) { st.mode = 'config'; return 'Enter configuration commands, one per line.  End with CNTL/Z.'; }
+    if (/^(wr|write|write memory|copy run(ning-config)? start(up-config)?)$/.test(low)) return 'Building configuration...\n[OK]\n! Configuration copiée en mémoire non volatile : elle survivra à un redémarrage.';
+    return runCommand({ d: d.id }, raw);
+  }
+  if (st.mode !== 'exec' && /^conf(i|ig|igu|igur|igure)?( t\w*)?$/.test(low)) return '! Tu es déjà en mode configuration.';
+  if (st.mode === 'config') {
+    const m = matchGrammar(confCmds(d), low);
+    if (!m) return `% Invalid input detected.\n! Commande inconnue en mode configuration. Tape « ? » pour la liste.`;
+    if (m.ambiguous) return `% Ambiguous command: "${raw}"`;
+    const k = m.c.p.split(' ')[0];
+    if (m.c.rt) return aclConf(d, m, raw);
+    if (k === 'interface') {
+      const ports = findPorts(d, m.args[0]);
+      if (!ports.length) return `% Interface inconnue : « ${m.args[0]} ». Exemple : interface ${CAT[d.type].ports[0].id}`;
+      if (kindOf(d) !== 'router' && !hasCfg(d, portDef(d, ports[0]))) return `% ${ports[0]} : rien à configurer sur ce port pour l’instant.`;
+      st.mode = 'if'; st.ifs = ports;
+      return ports.length > 1 ? `! ${ports.length} ports sélectionnés : ${ports[0]} à ${ports[ports.length - 1]}` : '';
+    }
+    if (k === 'vlan') return VLAN_IDS.includes(m.args[0]) ? `! Le VLAN ${m.args[0]} (${VLANS[m.args[0]].name}) existe déjà dans la base VLAN.` : `% VLAN ${m.args[0]} hors du plan d'adressage de la salle (VLAN ${VLAN_IDS.join(', ')}).`;
+    if (k === 'hostname') return `! Les noms d'hôte suivent la convention de la salle (${d.host}) : on les garde.`;
+    return '';
+  }
+  if (st.mode === 'acl') return aclEntryCmd(d, st.acl, raw);
+  if (st.mode === 'line') return lineCmd(d, low, raw);
+  if (kindOf(d) === 'router') return routerIfCmd(d, st.ifs, low, raw);
+  // mode interface
+  const m = matchGrammar(IF_CMDS, low);
+  if (!m) return `% Invalid input detected.\n! Commande inconnue pour une interface. Tape « ? » pour la liste.`;
+  if (m.ambiguous) return `% Ambiguous command: "${raw}"`;
+  const notes = [];
+  let keys = [];
+  for (const pid of st.ifs) {
+    const pd = portDef(d, pid);
+    if (m.c.rj && pd.t !== 'rj45') { notes.push(`% ${pid} : réglage réservé aux ports cuivre.`); continue; }
+    const patch = m.c.f(m.args, cfg(d, pid));
+    if (typeof patch === 'string') return patch;
+    keys = Object.keys(patch);
+    if (keys.length) { CLI_SELF = true; try { actPortCfg(d, pid, patch); } finally { CLI_SELF = false; } }
+  }
+  const c = cfg(d, st.ifs[0]), who = st.ifs.length > 1 ? st.ifs.length + ' ports' : st.ifs[0];
+  const what = { mode: () => c.mode === 'access' ? `mode access, VLAN ${c.vlan}` : `mode trunk, VLAN autorisés ${c.allowed.join(',') || 'aucun'}`, vlan: () => `VLAN d'accès ${c.vlan} (${VLANS[c.vlan].name})`, allowed: () => `VLAN autorisés ${c.allowed.join(',') || 'aucun'}`, native: () => `VLAN natif ${c.native}`, admin: () => c.admin ? 'port allumé' : 'port éteint (administratively down)' };
+  const key = keys.find(k => what[k]);
+  if (key) notes.push(`! ${who} : ${what[key]()}`);
+  return notes.join('\n');
+}
+// Commandes proposées en bas du terminal, selon le mode
+function cliChips(d) {
+  const st = cliState(d);
+  if (kindOf(d) === 'router' && st.mode !== 'exec') {
+    const nm = Object.keys(aclOf(d).lists)[0] || 'EDGE-IN';
+    const std = Object.keys(aclOf(d).lists).find(n => /^\d+$/.test(n) && +n < 100) || '10';
+    const L = st.mode === 'line' ? ['transport input ssh', `access-class ${std} in`, 'do show ip ssh', 'exit']
+      : st.mode === 'acl' ? ['deny ip 10.0.0.0 0.255.255.255 any', 'permit tcp host 198.51.100.1 host 198.51.100.2 eq bgp', 'permit tcp any host 203.0.113.10 eq 443', 'no 10', 'do show access-lists', 'exit']
+      : st.mode === 'if' ? [`ip access-group ${nm} in`, `no ip access-group ${nm} in`, 'do show access-lists', 'exit']
+      : [`ip access-list extended ${nm}`, 'access-list 10 permit 10.99.0.0 0.0.0.255', 'line vty 0 4', 'interface Te0/0/0', 'do show access-lists'];
+    return L.concat(['end', '?']).map(c => ({ c }));
+  }
+  if (isIOS(d) && st.mode === 'if') {
+    const L = ['switchport mode access', 'switchport access vlan 10', 'switchport mode trunk', 'switchport trunk allowed vlan 10,20,99', 'switchport trunk native vlan 999', 'no shutdown', 'shutdown', 'description vers-srv'];
+    if (kindOf(d) === 'switch') L.push('spanning-tree bpduguard enable');
+    return L.concat(['exit', 'end', '?']).map(c => ({ c }));
+  }
+  if (isIOS(d) && st.mode === 'config') {
+    const cabled = CAT[d.type].ports.find(p => hasCfg(d, p) && portCable(d.id, p.id)) || CAT[d.type].ports.find(p => hasCfg(d, p));
+    const L = [];
+    if (cabled) L.push(`interface ${cabled.id}`);
+    if (kindOf(d) === 'switch') L.push(`interface range ${unusedRange(d)}`);
+    return L.concat(['vlan 10', 'do show vlan brief', 'end', '?']).map(c => ({ c }));
+  }
+  const L = cmdList({ d: d.id }).filter(x => x.chip).map(x => ({ c: x.c, h: x.hint }));
+  if (isIOS(d)) L.unshift({ c: 'configure terminal', h: 'Passer en mode configuration' });
+  return L;
+}
+
+// Premier bloc de ports libres et allumés d'un switch, pour « interface range » (ex. Gi1/0/3-24)
+function unusedRange(sw) {
+  const ps = CAT[sw.type].ports.filter(p => p.role !== 'mgmt');
+  const free = ps.map(p => !portCable(sw.id, p.id) && cfg(sw, p.id).admin);
+  const i = free.indexOf(true); if (i < 0) return ps[0].id + '-' + ps[ps.length - 1].id.match(/\d+$/)[0];
+  const pre = ps[i].id.replace(/\d+$/, '');
+  let j = i; while (j + 1 < ps.length && free[j + 1] && ps[j + 1].id.replace(/\d+$/, '') === pre) j++;
+  return i === j ? ps[i].id : ps[i].id + '-' + ps[j].id.match(/\d+$/)[0];
+}
+/* ---------- ACL dans la CLI du routeur ---------- */
+const confCmds = d => CONF_CMDS.filter(c => (!c.rt || kindOf(d) === 'router') && (!c.sw || kindOf(d) === 'switch'));
+const RIF_CMDS = [
+  { p: 'ip access-group <rest>', h: 'filtre ce qui entre par ce port avec l’ACL NOM' },
+  { p: 'no ip access-group <rest>', h: 'retire l’ACL de ce port' },
+];
+const aclName = s => /^[A-Za-z][\w-]{0,23}$/.test(s) || /^\d{1,3}$/.test(s);
+function cliAct(fn) { CLI_SELF = true; try { return fn(); } finally { CLI_SELF = false; } }
+// ip access-list extended / access-list N … en mode configuration
+function aclConf(d, m, raw) {
+  const st = cliState(d), p = m.c.p;
+  if (p.startsWith('line vty')) {
+    if (!/^0( 4| 15)?$/.test(m.args[0].trim())) return '% Les lignes d’accès à distance se règlent ensemble : line vty 0 4';
+    st.mode = 'line'; return '';
+  }
+  if (p.startsWith('ip access-list')) {
+    const name = raw.split(' ').pop();
+    if (!aclName(name)) return '% Nom d’ACL invalide : lettres, chiffres, tirets (ex. EDGE-IN).';
+    const A = aclOf(d), isNew = !A.lists[name];
+    if (isNew) A.lists[name] = [];
+    st.mode = 'acl'; st.acl = name;
+    return isNew ? `! ACL étendue ${name} créée (vide). Ajoute des lignes permit / deny, dans l’ordre.` : `! ACL ${name} : ${A.lists[name].length} ligne(s). Les nouvelles lignes s’ajoutent à la fin.`;
+  }
+  if (p.startsWith('no ip access-list')) { const name = raw.split(' ').pop(); const r = cliAct(() => actAclDrop(d, name)); return r ? '% ' + r : `! ACL ${name} supprimée.`; }
+  if (p.startsWith('no access-list')) { const r = cliAct(() => actAclDrop(d, String(m.args[0]))); return r ? '% ' + r : `! ACL ${m.args[0]} supprimée.`; }
+  const n = m.args[0];
+  if (!(n >= 1 && n <= 199)) return '% Numéro d’ACL : 1 à 99 (standard, source seule) ou 100 à 199 (étendue).';
+  const e = aclParse(m.args[1], n < 100);
+  if (typeof e === 'string') return e;
+  const r = cliAct(() => actAclAdd(d, String(n), e));
+  return typeof r === 'string' ? '% ' + r : `! ACL ${n} ${n < 100 ? 'standard' : 'étendue'}, ligne ${r.seq} : ${n < 100 ? aclStd(r) : aclLine(r)}`;
+}
+// Une ligne tapée en mode (config-ext-nacl)
+function aclEntryCmd(d, name, raw) {
+  let t = raw.trim();
+  const no = t.match(/^no\s+(\d+)$/i);
+  if (no) { const r = cliAct(() => actAclDel(d, name, +no[1])); return r ? '% ' + r : `! Ligne ${no[1]} supprimée.`; }
+  if (/^rem(a|ar|ark)?\b/i.test(t)) return '! Remarque notée : elle documente l’ACL sans rien filtrer.';
+  let seq = null;
+  const sm = t.match(/^(\d+)\s+(.+)$/); if (sm) { seq = +sm[1]; t = sm[2]; }
+  t = t.replace(/^(pe|per|perm|permi)\b/i, 'permit').replace(/^(de|den)\b/i, 'deny');
+  const e = aclParse(t, false);
+  if (typeof e === 'string') return e;
+  const r = cliAct(() => actAclAdd(d, name, e, seq));
+  return typeof r === 'string' ? '% ' + r : `! Ligne ${r.seq} : ${aclLine(r)}`;
+}
+function routerIfCmd(d, ifs, low, raw) {
+  const m = matchGrammar(RIF_CMDS, low);
+  if (!m) return '% Invalid input detected.\n! Sur ce routeur, une interface accepte « ip access-group NOM in ». Tape « ? ».';
+  const parts = m.args[0].split(' '), name = parts[0], dir = parts[1] || '';
+  if (!/^in$/i.test(dir)) return dir === 'out' ? '% Ici, on filtre en entrée (in) : au plus près de la source, avant que le trafic traverse le routeur.' : '% Précise le sens : ip access-group NOM in';
+  const real = Object.keys(aclOf(d).lists).find(x => x.toLowerCase() === name.toLowerCase());
+  const out = [];
+  for (const pid of ifs) {
+    if (m.c.p.startsWith('no')) { cliAct(() => actAclApply(d, pid, null)); out.push(`! ${pid} : plus aucune ACL en entrée.`); continue; }
+    if (!real) return `% L’ACL ${name} n’existe pas encore : crée-la avec « ip access-list extended ${name} ».`;
+    cliAct(() => actAclApply(d, pid, real));
+    out.push(`! ${pid} : l’ACL ${real} filtre tout ce qui entre par ce port.${portDef(d, pid).role === 'wan' ? '' : ' (Ce port ne mène pas aux opérateurs.)'}`);
+  }
+  return out.join('\n');
+}
+// show access-lists, avec des compteurs plausibles depuis la mise en service
+function aclShow(d) {
+  const A = aclOf(d), names = Object.keys(A.lists), out = [];
+  if (!names.length) return ['! Aucune ACL. Pour en créer une : conf t, puis ip access-list extended EDGE-IN.'];
+  const hits = {};
+  for (const [pid, nm] of Object.entries(A.in)) {
+    const L = A.lists[nm] || [], mins = Math.max(1, S.t - ((A.since || {})[pid] ?? S.t));
+    for (const k of aclPkts(wanOp(d, pid) || 1)) { const r = aclEval(L, k); if (r.i >= 0) hits[nm + ':' + r.e.seq] = (hits[nm + ':' + r.e.seq] || 0) + Math.round(k.w * mins); }
+  }
+  for (const nm of names) {
+    const std = /^\d+$/.test(nm) && +nm < 100;
+    out.push(`${std ? 'Standard' : 'Extended'} IP access list ${nm}`);
+    for (const e of A.lists[nm]) {
+      const h = hits[nm + ':' + e.seq];
+      out.push(`    ${e.seq} ${std ? aclStd(e) : aclLine(e)}${h ? ` (${h} matches)` : ''}`);
+    }
+    const on = Object.keys(A.in).filter(p => A.in[p] === nm);
+    const vty = vtyOf(d).acl === nm;
+    if (on.length) out.push(`    ! appliquée en entrée sur ${on.join(', ')}`);
+    else if (!vty) out.push('    ! appliquée sur aucune interface : elle ne filtre rien pour l’instant');
+    if (vty) out.push(`    ! posée sur les lignes VTY (access-class ${nm} in)`);
+  }
+  out.push('! Tout paquet qui ne correspond à aucune ligne est refusé (deny implicite).');
+  return out;
+}
+// ACL standard : source seule, affichée comme IOS (« 192.168.1.0, wildcard bits 0.0.0.255 »)
+const aclStd = e => e.act + ' ' + (e.src === 'any' ? 'any' : e.src.startsWith('host ') ? e.src.slice(5) : e.src.replace(' ', ', wildcard bits '));
+// Mode (config-line) des lignes VTY
+const LINE_CMDS = [
+  { p: 'transport input <rest>', h: 'protocoles acceptés : ssh (chiffré) plutôt que telnet (en clair)' },
+  { p: 'access-class <rest>', h: 'filtre qui peut se connecter : access-class 10 in (ACL standard)' },
+  { p: 'no access-class <rest>', h: 'retire l’ACL des lignes' },
+  { p: 'login local', h: 'comptes locaux (déjà en place dans la salle)' },
+];
+function lineCmd(d, low, raw) {
+  const m = matchGrammar(LINE_CMDS, low);
+  if (!m) return '% Invalid input detected.\n! Sur une ligne VTY : transport input ssh, access-class 10 in. Tape « ? ».';
+  if (m.c.p === 'login local') return '! Les comptes locaux sont déjà en place dans la salle.';
+  if (m.c.p.startsWith('transport')) {
+    const t = m.args[0].split(' ').filter(Boolean);
+    if (!t.length || !t.every(x => ['ssh', 'telnet', 'all', 'none'].includes(x))) return '% Choix possibles : ssh, telnet, all, none.';
+    const v = t.includes('all') || (t.includes('ssh') && t.includes('telnet')) ? 'all' : t[0];
+    cliAct(() => actVty(d, { transport: v }));
+    return v === 'ssh' ? '! Seul SSH (chiffré) est accepté sur les lignes VTY.' : v === 'none' ? '! Plus aucune connexion à distance possible : attention à ne pas t’enfermer dehors.' : '! Telnet est accepté : identifiants et commandes circulent en clair sur le réseau.';
+  }
+  const parts = raw.trim().split(/\s+/).slice(m.c.p.startsWith('no') ? 2 : 1), name = parts[0] || '', dir = (parts[1] || '').toLowerCase();
+  if (m.c.p.startsWith('no')) { cliAct(() => actVty(d, { acl: null })); return '! Plus aucune ACL sur les lignes VTY.'; }
+  if (dir !== 'in') return '% Précise le sens : access-class 10 in';
+  if (!(/^\d+$/.test(name) && +name < 100)) return '% Sur une ligne VTY, on pose une ACL standard (1 à 99) : seule l’adresse source compte.';
+  if (!aclOf(d).lists[name]) return `% L’ACL ${name} n’existe pas : crée-la d’abord (access-list ${name} permit 10.99.0.0 0.0.0.255).`;
+  cliAct(() => actVty(d, { acl: name }));
+  return `! Lignes VTY : seules les sources autorisées par l’ACL ${name} peuvent ouvrir une session.`;
 }

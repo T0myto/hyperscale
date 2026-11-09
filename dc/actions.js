@@ -143,6 +143,64 @@ function actPortCfg(d, pid, patch) {
   return null;
 }
 
+/* ---------- ACL du routeur ---------- */
+const aclCli = (d, name, extra) => cli(d, [/^\d+$/.test(name) ? `! ACL numérotée ${name}` : `ip access-list extended ${name}`, ...extra]);
+function actAclAdd(d, name, e, seq) {
+  const A = aclOf(d), L = A.lists[name] || (A.lists[name] = []);
+  if (L.length >= 30) return "Cette ACL a déjà 30 lignes : simplifie-la.";
+  const s = seq || (L.length ? Math.max(...L.map(x => x.seq)) + 10 : 10);
+  if (L.some(x => x.seq === s)) return `Le numéro ${s} est déjà pris dans l'ACL ${name}.`;
+  const ent = Object.assign({}, e, { seq: s });
+  L.push(ent); L.sort((x, y) => x.seq - y.seq);
+  if (/^\d+$/.test(name)) cli(d, [`access-list ${name} ${+name < 100 ? ent.act + ' ' + ent.src : aclLine(ent)}`]);
+  else aclCli(d, name, [` ${s} ${aclLine(ent)}`]);
+  if (typeof learnHook === 'function') learnHook('acl', d);
+  touch(); return ent;
+}
+function actAclDel(d, name, seq) {
+  const L = aclOf(d).lists[name]; if (!L) return "ACL introuvable.";
+  const i = L.findIndex(x => x.seq === seq); if (i < 0) return `Pas de ligne ${seq} dans l'ACL ${name}.`;
+  L.splice(i, 1);
+  aclCli(d, name, [` no ${seq}`]);
+  touch(); return null;
+}
+// Monte ou descend une ligne : on échange les numéros de séquence, comme on le ferait avec « no » puis une ligne numérotée
+function actAclMove(d, name, seq, dir) {
+  const L = aclOf(d).lists[name]; if (!L) return "ACL introuvable.";
+  const i = L.findIndex(x => x.seq === seq), j = i + dir;
+  if (i < 0 || j < 0 || j >= L.length) return null;
+  const a = L[i], b = L[j], t = a.seq; a.seq = b.seq; b.seq = t;
+  L.sort((x, y) => x.seq - y.seq);
+  aclCli(d, name, [` no ${a.seq}`, ` no ${b.seq}`, ` ${a.seq} ${aclLine(a)}`, ` ${b.seq} ${aclLine(b)}`]);
+  touch(); return null;
+}
+function actAclDrop(d, name) {
+  const A = aclOf(d); if (!A.lists[name]) return "ACL introuvable.";
+  delete A.lists[name];
+  for (const p in A.in) if (A.in[p] === name) delete A.in[p];
+  if (d.vty && d.vty.acl === name) d.vty.acl = null;
+  cli(d, [/^\d+$/.test(name) ? `no access-list ${name}` : `no ip access-list extended ${name}`]);
+  touch(); return null;
+}
+function actAclApply(d, pid, name) {
+  const A = aclOf(d);
+  if (name && !A.lists[name]) A.lists[name] = [];
+  const old = A.in[pid];
+  if (name) { A.in[pid] = name; (A.since || (A.since = {}))[pid] = S.t; } else delete A.in[pid];
+  cli(d, [`interface ${pid}`, name ? ` ip access-group ${name} in` : ` no ip access-group ${old || ''} in`]);
+  touch(); return null;
+}
+
+function actVty(d, patch) {
+  const v = vtyOf(d), L = ['line vty 0 4'];
+  if ('acl' in patch && patch.acl && !(aclOf(d).lists[patch.acl])) return `L'ACL ${patch.acl} n'existe pas.`;
+  if ('transport' in patch) L.push(` transport input ${patch.transport === 'all' ? 'telnet ssh' : patch.transport}`);
+  if ('acl' in patch) L.push(patch.acl ? ` access-class ${patch.acl} in` : ` no access-class ${v.acl || ''} in`);
+  Object.assign(v, patch);
+  cli(d, L);
+  touch(); return null;
+}
+
 /* ---------- Disques, RAID, mémoire ---------- */
 function actAddDisk(d, bay, type) {
   if (d.disks[bay]) return "La baie est occupée.";

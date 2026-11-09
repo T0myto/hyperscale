@@ -79,7 +79,9 @@ function renderSide() {
   const ae = document.activeElement;
   if (ae && $('#sidebody').contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA')) return;
   clearLive('s'); LIVEP = 's';
-  document.querySelectorAll('#tabs [role=tab]').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === UI.tab)));
+  const show = { contracts: true, equip: true, tickets: S.tickets.length > 0, network: devsOfKind('fw').length > 0 || curChap() >= 2, room: curChap() >= 3 || unlocked('rowpower') };
+  if (!show[UI.tab]) UI.tab = 'contracts';
+  document.querySelectorAll('#tabs [role=tab]').forEach(t => { t.hidden = !show[t.dataset.tab]; t.setAttribute('aria-selected', String(t.dataset.tab === UI.tab)); });
   const body = $('#sidebody');
   const scroll = body.scrollTop;
   body.innerHTML = ({ contracts: sideContracts, equip: sideEquip, tickets: sideTickets, network: sideNetwork, room: sideRoom })[UI.tab]();
@@ -87,80 +89,208 @@ function renderSide() {
 }
 function updateLive() { document.querySelectorAll('[data-live]').forEach(el => { const f = LIVE[el.dataset.live]; if (f) { const v = f(); if (el.innerHTML !== v) el.innerHTML = v; } }); }
 
-/* ----- Contrats ----- */
-function tutoSteps() {
-  const racks = S.racks.map((k, i) => i).filter(i => S.racks[i].kind === 'rack');
-  const r0 = racks[0];
-  const fw = devsOfKind('fw')[0], rtr = devsOfKind('router')[0], sws = devsOfKind('switch'), srvs = devsOfKind('server');
-  const fwC = fw && portCable(fw.id, 'port2');
-  const fwSw = fwC && kindOf(dev(otherEnd(fwC, fw.id, 'port2').d)) === 'switch' ? otherEnd(fwC, fw.id, 'port2') : null;
-  const opLink = rtr && CAT.router.ports.some(p => p.role === 'wan' && (c => c && kindOf(dev(otherEnd(c, rtr.id, p.id).d)) === 'odf')(portCable(rtr.id, p.id)));
-  const wanLink = fw && (c => c && kindOf(dev(otherEnd(c, fw.id, 'port1').d)) === 'router')(portCable(fw.id, 'port1'));
-  const srvLink = [];
-  for (const s of srvs) for (const p of CAT[s.type].ports) if (p.role !== 'bmc') { const c = portCable(s.id, p.id); if (c) { const o = otherEnd(c, s.id, p.id); if (kindOf(dev(o.d)) === 'switch') srvLink.push(o); } }
-  const all = [rtr, fw, ...sws, ...srvs].filter(Boolean);
-  const powered = all.length >= 4 && all.every(d => d.psus.every(p => p.out) && (d.psus.length < 2 || d.psus[0].out.pdu !== d.psus[1].out.pdu));
-  const vm = S.vms.find(v => v.k === 'c1');
-  const cs = S.contracts.find(c => c.id === 'c1');
-  const openR0 = () => { if (r0 !== undefined) openRack(r0); };
-  const goPort = (d, p) => { if (!d) return openR0(); openRack(dev(d).rack); UI.face = 'rear'; select({ t: 'port', d, p }); };
-  return [
-    { t: 'Dans la salle, clique un emplacement libre de la rangée A et installe une baie 42U', ok: racks.length > 0, go: () => { backToRoom(); UI.tab = 'equip'; select({ t: 'slot', row: 'A', pos: 1 }); } },
-    { t: 'Ouvre la baie et installe un routeur de bordure, un pare-feu, un switch d’accès et un serveur 1U (Catalogue)', ok: !!(rtr && fw && sws.length && srvs.length), go: () => { openR0(); openShop(!rtr ? 'router' : !fw ? 'fw' : !sws.length ? 'sw24' : 'srv1'); } },
-    { t: 'Face arrière : branche chaque alimentation, PSU1 sur le PDU A et PSU2 sur le PDU B', ok: powered, go: () => { const d = all.find(x => x.psus.some(p => !p.out)) || all[0]; if (d) { openRack(d.rack); UI.face = 'rear'; select({ t: 'dev', d: d.id }); } else openR0(); } },
-    { t: 'Relie le routeur (Te0/0/0) à l’ODF de la salle MMR (OP1) : fibre monomode OS2 et modules LR', ok: !!opLink, go: () => goPort(rtr && rtr.id, 'Te0/0/0') },
-    { t: 'Relie le routeur (Te0/1/0) au port WAN du pare-feu (port1) avec un DAC', ok: !!wanLink, go: () => goPort(rtr && rtr.id, 'Te0/1/0') },
-    { t: 'Relie le pare-feu (port2) au switch (Te1/1/1) avec un DAC, puis passe les deux bouts en trunk avec le VLAN 10 autorisé', ok: !!(fwSw && cfg(dev(fwSw.d), fwSw.p).mode === 'trunk' && carries(fwSw, 10) && carries({ d: fw.id, p: 'port2' }, 10)), go: () => fwSw && !carries(fwSw, 10) ? goPort(fwSw.d, fwSw.p) : goPort(fw && fw.id, 'port2') },
-    { t: 'Câble le serveur (eno1) à un port Gi du switch en Cat 6, et passe ce port en access VLAN 10', ok: srvLink.some(o => carries(o, 10)), go: () => srvLink[0] ? goPort(srvLink[0].d, srvLink[0].p) : goPort(srvs[0] && srvs[0].id, 'eno1') },
-    { t: 'Déploie la VM « Site web HTTPS » dans le VLAN 10', ok: !!vm, go: () => openDeploy('c1', 'web') },
-    { t: 'Autorise Internet → DMZ TCP 443 sur le pare-feu', ok: ruleAllows('Internet', 'DMZ', 'tcp', 443), go: () => { UI.ruleDraft = { src: 'Internet', dst: 'DMZ', proto: 'tcp', port: '443' }; UI.tab = 'network'; renderAll(); } },
-    { t: 'Teste tout : lance la recette du contrat', ok: !!(cs && cs.state === 'active'), go: () => { if (cs) openRecette(cs); } },
-  ];
+/* ----- Contrats : chapitres, guide pas à pas et notions ----- */
+UI.ctOpen = {};
+// Chapitre en cours : celui du contrat à construire, sinon de l'offre, sinon du dernier livré
+function curChap() {
+  const cur = S.contracts.find(c => c.state === 'setup') || S.contracts.find(c => c.state === 'offer') || S.contracts[S.contracts.length - 1];
+  return cur ? contractDef(cur.id).chap || 4 : 1;
 }
-function contractCard(cs) {
-  const def = contractDef(cs.id), r = D.ct[cs.id];
-  const st = cs.state === 'offer' ? ['offer', 'Offre'] : cs.state === 'setup' ? (r && r.st === 'ok' ? ['ok', 'Prêt pour la recette'] : ['todo', 'À construire']) : r && r.st === 'ok' ? ['ok', 'En service'] : r && r.st === 'deg' ? ['warn', 'Dégradé'] : ['bad', 'En panne'];
-  let s = `<article class="card ccard ${def.internal ? 'internal' : ''}"><header><div><div class="eyebrow">${def.internal ? 'Projet interne' : 'Client'}</div><h3>${esc(def.client)}</h3></div>${pill(st[0], st[1])}</header>`;
-  s += `<p class="muted">${esc(def.what)}</p>`;
-  s += `<div class="kv"><span>Revenu</span><b>${def.rev ? money(def.rev) + ' / h' : '—'}</b><span>Prime de mise en service</span><b>${money(def.bonus)}</b>`;
-  if (cs.state === 'active') s += `<span>Disponibilité (SLA)</span><b>${live(() => cs.tot ? (cs.up / cs.tot * 100).toFixed(2).replace('.', ',') + ' %' : '—')}</b>`;
-  s += `</div>`;
-  if (def.unlock.length) s += `<p class="unl">Débloque : ${def.unlock.map(u => esc(unlockName(u))).join(', ')}</p>`;
-  if (cs.state === 'offer') return s + `<button class="btn primary" data-act="accept" data-id="${cs.id}">Signer le contrat</button></article>`;
-  // services
-  s += `<h4>Services demandés</h4><ul class="svcl">`;
+const firstRack = () => { const i = S.racks.findIndex(k => k.kind === 'rack'); return i < 0 ? undefined : i; };
+function goPort(d, p) {
+  if (!d) { const r = firstRack(); if (r !== undefined) openRack(r); return; }
+  openRack(dev(d).rack); UI.face = 'rear'; select({ t: 'port', d, p });
+}
+function goPlug(kinds) {
+  const all = kinds.flatMap(devsOfKind);
+  const d = all.find(x => x.psus.some(p => !p.out)) || all.find(x => x.psus.length === 2 && !CHK.ab(x)) || all[0];
+  if (d) { openRack(d.rack); UI.face = 'rear'; select({ t: 'dev', d: d.id }); }
+}
+function setWinTab(d, tab, draft) { const w = WINS.find(x => x.key === 'd:' + d); if (!w) return; w.tab = tab; if (draft) w.draft = draft; renderWins(true); }
+function goRule(f) {
+  UI.ruleDraft = { src: f[0], dst: f[1], proto: f[2], port: String(f[3]) };
+  const fw = devsOfKind('fw')[0];
+  if (!fw) { UI.tab = 'network'; return; }
+  openWin({ d: fw.id }); setWinTab(fw.id, 'cfg');
+  // amène la matrice de flux à l'écran, sous le réglage des ports
+  const w = WINS.find(x => x.key === 'd:' + fw.id), el = w && document.querySelector(`#${w.id} .rulecard`);
+  if (el) { el.scrollIntoView({ block: 'start' }); const p = el.querySelector('.r-port'); if (p) p.focus({ preventScroll: true }); }
+}
+function goSrvCfg() { const s = devsOfKind('server')[0]; if (s) { openWin({ d: s.id }); setWinTab(s.id, 'cfg'); } }
+// Ce que fait le bouton « Montrer » de chaque objectif de mission
+const GOAL_GO = {
+  rack: () => { backToRoom(); UI.tab = 'equip'; select({ t: 'slot', row: 'A', pos: 1 }); },
+  shop: () => { const r = firstRack(); if (r === undefined) return GOAL_GO.rack(); openRack(r); openShop(!devsOfKind('switch').length ? 'sw24' : 'srv1'); },
+  plugsw: () => goPlug(['switch']),
+  plugsrv: () => goPlug(['server']),
+  cablesrv: () => { const s = devsOfKind('server')[0]; goPort(s && s.id, 'eno1'); },
+  cfgsrv: () => { const x = CHK.srvLinks()[0]; if (x) openWin({ d: x.o.d, p: x.o.p }); else GOAL_GO.cablesrv(); },
+  clisw: () => { const sw = devsOfKind('switch')[0]; if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli', 'show vlan brief'); } },
+  shopnet: () => { const r = firstRack(); if (r !== undefined) { openRack(r); openShop(!devsOfKind('router').length ? 'router' : 'fw'); } },
+  plugnet: () => goPlug(['router', 'fw']),
+  oplink: () => { const r = devsOfKind('router')[0]; goPort(r && r.id, 'Te0/0/0'); },
+  wanlink: () => { const r = devsOfKind('router')[0]; goPort(r && r.id, 'Te0/1/0'); },
+  bpdu: () => { const x = CHK.srvLinks().find(y => !cfg(dev(y.o.d), y.o.p).bpdu) || CHK.srvLinks()[0]; if (x) openWin({ d: x.o.d, p: x.o.p }); },
+  unused: () => {
+    const sw = devsOfKind('switch').find(s => CAT[s.type].ports.some(p => p.role !== 'mgmt' && !portCable(s.id, p.id) && cfg(s, p.id).admin)) || devsOfKind('switch')[0];
+    if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli', cliState(sw).mode === 'exec' ? 'conf t' : `interface range ${unusedRange(sw)}`); }
+  },
+  native: () => { for (const sw of devsOfKind('switch')) for (const p of CAT[sw.type].ports) { const c = cfg(sw, p.id); if (portCable(sw.id, p.id) && c.mode === 'trunk' && c.native !== 999) return openWin({ d: sw.id, p: p.id }); } },
+  clistatus: () => { const sw = devsOfKind('switch')[0]; if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli', 'show interfaces status'); } },
+  aclmk: () => goRouter('cfg'),
+  aclspoof: () => goRouter('cfg', null, { act: 'deny', proto: 'ip', src: '10.0.0.0 0.255.255.255', dst: 'any', port: '' }),
+  aclbgp: () => goRouter('cfg', null, { act: 'permit', proto: 'tcp', src: 'host 198.51.100.1', dst: 'host 198.51.100.2', port: 'bgp' }),
+  aclsvc: () => {
+    // pré-remplit une seule ligne avec tous les ports encore refusés du même protocole (eq accepte plusieurs ports)
+    const t = CHK.aclTarget(), miss = aclPkts(1).filter(p => p.k === 'svc' && (!t || aclEval(t.list, p).act !== 'permit'));
+    const proto = (miss[0] || { proto: 'tcp' }).proto, ports = miss.filter(p => p.proto === proto).map(p => p.port).slice(0, 10);
+    goRouter('cfg', null, { act: 'permit', proto, src: 'any', dst: 'host 203.0.113.10', port: ports.join(' ') || '443' });
+  },
+  stdacl: () => goRtrCli({ config: 'access-list 10 permit 10.99.0.0 0.0.0.255' }),
+  vtyssh: () => goRtrCli({ config: 'line vty 0 4', line: 'transport input ssh' }),
+  vtyacl: () => goRtrCli({ config: 'line vty 0 4', line: `access-class ${CHK.stdAdmin() || '10'} in` }),
+  clissh: () => goRtrCli({ exec: 'show ip ssh', config: 'do show ip ssh', line: 'do show ip ssh', acl: 'do show ip ssh', if: 'do show ip ssh' }),
+  aclssh: () => goRouter('cfg', null, { act: 'deny', proto: 'tcp', src: 'any', dst: 'host 198.51.100.2', port: '22' }),
+  aclapply: () => goRouter('cfg'),
+  aclshow: () => goRouter('cli', 'show access-lists'),
+  clirtr: () => { const r = devsOfKind('router')[0]; if (r) { openWin({ d: r.id }); setWinTab(r.id, 'cli', 'show bgp summary'); } },
+};
+// Étapes d'un contrat client, déduites de ce qu'il demande
+function serviceSteps(cs) {
+  const def = contractDef(cs.id), vms = S.vms.filter(v => v.k === cs.id), St = [];
+  const zones = [...new Set(def.svcs.map(r => SVC[r.s].zone))];
+  for (const z of zones) {
+    if (VLANS[z].gw && !def.lanOnly) St.push({ t: `Le pare-feu est la passerelle du VLAN ${z} (${VLANS[z].name}) : relie son port2 au switch en trunk, VLAN ${z} autorisé des deux côtés`, ok: CHK.fwVlan(z), fiche: 'switch',
+      go: () => { const l = CHK.fwSwitch(); if (l) openWin({ d: l.sw.d, p: l.sw.p }); else { const fw = devsOfKind('fw')[0]; goPort(fw && fw.id, 'port2'); } } });
+    St.push({ t: `Amène le VLAN ${z} jusqu'au serveur : un port du switch en access VLAN ${z}, ou un trunk qui l'autorise`, ok: CHK.vlanToServer(z), fiche: 'switch',
+      go: () => { const x = CHK.srvLinks().find(y => !carries(y.o, z)) || CHK.srvLinks()[0]; if (x) openWin({ d: x.o.d, p: x.o.p }); else GOAL_GO.cablesrv(); } });
+  }
   for (const req of def.svcs) {
-    const list = S.vms.filter(v => v.k === cs.id && v.svc === req.s);
-    s += `<li><div class="row"><b>${esc(SVC[req.s].name)}</b> <span class="muted">× ${req.n} · ${SVC[req.s].soft} · VLAN ${SVC[req.s].zone}${req.raid ? ' · RAID ' + (req.raid === 10 ? '10' : 'tolérant') : ''}${req.anti ? ' · hôtes différents' : ''}</span></div>`;
-    for (const v of list) s += `<button class="vmrow" data-act="selvm" data-id="${v.id}">${stDot(D.vm[v.id] ? D.vm[v.id].st : 'down')} ${esc(v.name)} <span class="muted">${esc(dev(v.host) ? dev(v.host).host : '?')} · ${v.ip}</span></button>`;
-    if (list.length < req.n) s += `<button class="btn small" data-act="deploy" data-id="${cs.id}" data-svc="${req.s}">Déployer ${req.n - list.length > 1 ? (req.n - list.length) + ' VM' : 'la VM'}</button>`;
-    s += `</li>`;
+    const s = SVC[req.s], list = vms.filter(v => v.svc === req.s);
+    if (s.nas) St.push({ t: 'Installe une baie de stockage (NAS), ajoute des disques en face avant et choisis un RAID', ok: devsOfKind('nas').some(n => arrayInfo(n).valid), fiche: 'bak',
+      go: () => { const r = firstRack(); if (r !== undefined) { openRack(r); openShop('nas'); } } });
+    if (req.raid) St.push({ t: req.raid === 10 ? 'Prépare une grappe RAID 10 (au moins 4 disques) sur un serveur' : 'Vérifie que le serveur a un RAID qui tolère une panne de disque (RAID 1 livré d’origine)',
+      ok: [...devsOfKind('server'), ...devsOfKind('nas')].some(d => arrayInfo(d).valid && (req.raid === 10 ? d.raid === '10' : !['none', '0'].includes(d.raid))), fiche: 'raid', go: goSrvCfg });
+    if (req.antiRack) St.push({ t: `Les ${req.n} VM « ${s.name} » doivent être dans ${req.n} baies différentes, chacune avec son serveur`, ok: new Set(devsOfKind('server').map(d => d.rack)).size >= req.n, fiche: 'archi', go: GOAL_GO.rack });
+    St.push({ t: `Déploie ${req.n > 1 ? req.n + ' VM' : 'la VM'} « ${s.name} » dans le VLAN ${s.zone} (${VLANS[s.zone].name})`, ok: list.length >= req.n, fiche: 'virtu', go: () => openDeploy(cs.id, req.s) });
   }
-  s += `</ul><h4>Flux à autoriser</h4><ul class="flows">`;
-  for (const f of def.flows) {
-    const ok = ruleAllows(f[0], f[1], f[2], f[3]);
-    s += `<li>${stDot(ok ? 'ok' : 'down')} ${f[0]} → ${f[1]} ${f[2].toUpperCase()} ${f[3]} ${ok ? '' : `<button class="link" data-act="prefill" data-f="${esc(JSON.stringify(f))}">Préremplir</button>`}</li>`;
+  for (const f of def.flows) St.push({ t: `Ouvre le flux ${f[0]} → ${f[1]} ${f[2].toUpperCase()} ${f[3]} sur le pare-feu`, ok: ruleAllows(f[0], f[1], f[2], f[3]), fiche: 'pf', go: () => goRule(f) });
+  const rt = devsOfKind('router')[0], acl = rt && rt.acl && CAT.router.ports.filter(p => p.role === 'wan' && wanOp(rt, p.id)).map(p => aclIn(rt, p.id)).find(Boolean);
+  if (acl) for (const f of def.flows.filter(x => x[0] === 'Internet')) St.push({ t: `L'ACL ${acl.name} du routeur doit aussi laisser passer ${f[2].toUpperCase()} ${f[3]} vers 203.0.113.10`, fiche: 'acl',
+    ok: aclEval(acl.list, { proto: f[2], src: CLIENT_IP, dst: PUB_IP, port: f[3] }).act === 'permit', go: () => goRouter('cfg', null, { act: 'permit', proto: f[2], src: 'any', dst: 'host 203.0.113.10', port: String(f[3]) }) });
+  if (def.needOp2) St.push({ t: 'Achète le second opérateur (onglet Salle) et relie OP2 au routeur (Te0/0/1)', ok: !!(S.room.op2 && D.inet.ops >= 2), fiche: 'archi', go: () => { UI.tab = 'room'; } });
+  if (def.needGen) St.push({ t: 'Installe le groupe électrogène (onglet Salle)', ok: !!S.power.gen, fiche: 'onduleur', go: () => { UI.tab = 'room'; } });
+  const r = D.ct[cs.id];
+  St.push({ t: 'Teste tout : lance la recette, puis livre le contrat', ok: cs.state === 'active', fiche: 'recette', go: () => openRecette(cs), last: true, ready: !!(r && r.st === 'ok') });
+  return St;
+}
+function guideSteps(cs) {
+  const def = contractDef(cs.id);
+  if (!def.goals) return serviceSteps(cs);
+  const St = def.goals.map(g => ({ t: g.t, ok: g.ok(), fiche: g.fiche, go: GOAL_GO[g.k] }));
+  St.push({ t: 'Valide la mission', ok: cs.state === 'active', last: true, ready: St.every(x => x.ok) });
+  return St;
+}
+const ficheChip = id => FICHE(id) ? `<button class="nchip" data-act="fiche" data-id="${id}" title="Ouvrir la fiche de cours">📘 ${esc(FICHE(id).title)}</button>` : '';
+function guideHtml(cs, St) {
+  const now = St.findIndex(x => !x.ok);
+  return `<ol class="guide2">${St.map((x, i) => {
+    const cls = x.ok ? 'done' : i === now ? 'now' : 'later';
+    let act = '';
+    if (!x.ok && i === now) {
+      if (x.last) act = x.ready ? '' : `<span class="muted">Termine d'abord les étapes au-dessus.</span>`;
+      else act = `<button class="btn small primary" data-act="gstep" data-id="${cs.id}" data-i="${i}">👉 Montrer</button>${x.fiche ? `<button class="link" data-act="fiche" data-id="${x.fiche}">Pourquoi ?</button>` : ''}`;
+    }
+    return `<li class="${cls}"><span>${esc(x.t)}</span>${act ? `<div class="gact">${act}</div>` : ''}</li>`;
+  }).join('')}</ol>`;
+}
+// Détails d'un contrat client : VM déployées et flux
+function contractDetails(cs) {
+  const def = contractDef(cs.id);
+  let s = '';
+  if (def.svcs.length) {
+    s += `<h4>Services</h4><ul class="svcl">`;
+    for (const req of def.svcs) {
+      const list = S.vms.filter(v => v.k === cs.id && v.svc === req.s);
+      s += `<li><div class="row"><b>${esc(SVC[req.s].name)}</b> <span class="muted">× ${req.n} · ${SVC[req.s].soft} · VLAN ${SVC[req.s].zone}${req.raid ? ' · RAID ' + (req.raid === 10 ? '10' : 'tolérant') : ''}${req.antiRack ? ' · baies différentes' : ''}</span></div>`;
+      for (const v of list) s += `<button class="vmrow" data-act="selvm" data-id="${v.id}">${stDot(D.vm[v.id] ? D.vm[v.id].st : 'down')} ${esc(v.name)} <span class="muted">${esc(dev(v.host) ? dev(v.host).host : '?')} · ${v.ip}</span></button>`;
+      s += `</li>`;
+    }
+    s += `</ul>`;
   }
-  s += `</ul>`;
-  if (cs.state === 'setup') s += `<button class="btn ${r && r.st === 'ok' ? 'primary' : ''}" data-act="recette" data-id="${cs.id}">${r && r.st === 'ok' ? 'Lancer la recette et livrer' : 'Lancer la recette (tests)'}</button>`;
-  if (def.tuto && cs.state === 'setup') {
-    const steps = tutoSteps();
-    s += `<h4>Mise en service pas à pas</h4><ol class="steps">${steps.map((x, i) => `<li class="${x.ok ? 'done' : ''}"><span>${esc(x.t)}</span>${x.ok ? '<i class="ck">✓</i>' : `<button class="link" data-act="tuto" data-i="${i}">Montrer</button>`}</li>`).join('')}</ol>`;
+  if (def.flows.length) s += `<h4>Flux autorisés sur le pare-feu</h4><ul class="flows">${def.flows.map(f => `<li>${stDot(ruleAllows(f[0], f[1], f[2], f[3]) ? 'ok' : 'down')} ${f[0]} → ${f[1]} ${f[2].toUpperCase()} ${f[3]}</li>`).join('')}</ul>`;
+  return s;
+}
+function diagHtml(cs) {
+  const r = D.ct[cs.id];
+  if (!r) return '';
+  const shown = r.R.filter(x => x.sev !== 'todo' && x.sev !== 'info').slice(0, 4);
+  return shown.length ? `<h4>Ce qui bloque encore</h4><ul class="diag">${shown.map(x => `<li class="${x.sev}">${esc(x.msg)}</li>`).join('')}</ul><p class="note">Le diagnostic suit les couches du modèle OSI : énergie et câbles d'abord (1), puis VLAN (2), IP (3), pare-feu (4) et application (7). <button class="link" data-act="fiche" data-id="dep">Fiche : méthode de dépannage</button></p>` : '';
+}
+const rewardHtml = def => `<div class="reward"><span>🎁 Prime <b>${money(def.bonus)}</b></span>${def.rev ? `<span>💶 <b>${money(def.rev)}</b> / h</span>` : ''}${def.unlock.length ? `<span>🔓 ${def.unlock.map(u => esc(unlockName(u))).join(', ')}</span>` : ''}</div>`;
+function contractCard(cs) {
+  const def = contractDef(cs.id);
+  const kind = def.mission ? 'Mission' : def.internal ? 'Projet interne' : 'Client';
+  if (cs.state === 'offer') {
+    return `<article class="card ccard offer"><header><div><div class="eyebrow">Nouveau · chapitre ${def.chap} · ${kind}</div><h3>${esc(def.client)}</h3></div>${pill('offer', 'À signer')}</header><p>${esc(def.what)}</p>
+${def.notions.length ? `<p class="lbl">Tu vas apprendre</p><div class="nchips">${def.notions.map(ficheChip).join('')}</div>` : ''}${rewardHtml(def)}
+<button class="btn primary big" data-act="accept" data-id="${cs.id}">✍️ ${def.mission ? 'Commencer la mission' : 'Signer le contrat'}</button></article>`;
   }
-  if (r && r.R.length) {
-    const shown = r.R.filter(x => x.sev !== 'todo').slice(0, 6);
-    if (shown.length) s += `<h4>Diagnostic</h4><ul class="diag">${shown.map(x => `<li class="${x.sev}">${esc(x.msg)}</li>`).join('')}</ul>`;
-  }
-  return s + '</article>';
+  const St = guideSteps(cs), n = St.filter(x => x.ok).length;
+  let s = `<article class="card ccard cur"><header><div><div class="eyebrow">Chapitre ${def.chap} · ${kind}</div><h3>${esc(def.client)}</h3></div>${pill('todo', `${n} / ${St.length}`)}</header>`;
+  s += `<p>${esc(def.what)}</p><div class="pbar"><i style="width:${Math.round(n / St.length * 100)}%"></i></div>`;
+  if (def.notions.length) s += `<p class="lbl">Notions</p><div class="nchips">${def.notions.map(ficheChip).join('')}</div>`;
+  s += `<p class="lbl">Étapes</p>` + guideHtml(cs, St);
+  const r = D.ct[cs.id];
+  if (def.mission) s += `<button class="btn primary big" data-act="mission" data-id="${cs.id}" ${r && r.st === 'ok' ? '' : 'disabled'}>✅ Valider la mission</button>`;
+  else s += `<button class="btn ${r && r.st === 'ok' ? 'primary' : ''} big" data-act="recette" data-id="${cs.id}">🧪 ${r && r.st === 'ok' ? 'Lancer la recette et livrer' : 'Lancer la recette (tests)'}</button>`;
+  if (!def.mission) s += diagHtml(cs) + contractDetails(cs);
+  return s + rewardHtml(def) + '</article>';
+}
+function doneRow(cs) {
+  const def = contractDef(cs.id), r = D.ct[cs.id], open = UI.ctOpen[cs.id];
+  const st = def.mission ? 'ok' : r ? r.st : 'down';
+  const sla = !def.mission && cs.tot ? ` · ${(cs.up / cs.tot * 100).toFixed(2).replace('.', ',')} %` : '';
+  let s = `<li><button class="vmrow" data-act="ctopen" data-id="${cs.id}">${stDot(st)} <b>${esc(def.client)}</b> <span class="muted">${def.mission ? 'mission réussie' : st === 'ok' ? 'en service' : st === 'deg' ? 'dégradé' : 'en panne'}${sla}</span></button>`;
+  if (open) s += `<div class="ctdet">${def.notions.length ? `<div class="nchips">${def.notions.map(ficheChip).join('')}</div>` : ''}${def.mission ? '' : diagHtml(cs) + contractDetails(cs)}</div>`;
+  return s + '</li>';
 }
 function unlockName(u) {
   return (CAT[u] && CAT[u].name) || (CABLES[u] && CABLES[u].name) || (ROOM_ITEMS[u] && ROOM_ITEMS[u].name) || (DISKS[u] && DISKS[u].name) || ({ ram: 'Extensions de mémoire', lacp: 'LACP' }[u]) || u;
 }
 function sideContracts() {
-  const order = { active: 1, setup: 0, offer: 2 };
-  const list = [...S.contracts].sort((a, b) => order[a.state] - order[b.state]);
-  return `<p class="intro">Chaque contrat liste ses services et ses flux. Le diagnostic suit les couches du modèle OSI : énergie et câbles d'abord, puis VLAN, IP, règles et application.</p>` + list.map(contractCard).join('');
+  const ch = curChap(), C = CHAPTERS.find(x => x.n === ch) || CHAPTERS[CHAPTERS.length - 1];
+  const inChap = CONTRACTS.filter(c => c.chap === ch);
+  const stOf = id => (S.contracts.find(c => c.id === id) || {}).state;
+  let s = `<section class="chap"><div class="eyebrow">Chapitre ${ch} sur ${CHAPTERS.length}</div><h3>${esc(C.name)}</h3><p class="muted">${esc(C.desc)}</p>
+<div class="chapdots">${inChap.map(c => `<i class="${stOf(c.id) === 'active' ? 'ok' : stOf(c.id) ? 'cur' : ''}" title="${esc(c.client)}"></i>`).join('')}</div></section>`;
+  const cur = S.contracts.filter(c => c.state === 'setup'), offers = S.contracts.filter(c => c.state === 'offer'), done = S.contracts.filter(c => c.state === 'active');
+  s += cur.map(contractCard).join('') + offers.map(contractCard).join('');
+  if (done.length) s += `<h4>Déjà livrés (${done.length})</h4><ul class="devlist donel">${done.slice().reverse().map(doneRow).join('')}</ul>`;
+  return s;
 }
+// Avant de commencer : les notions du contrat et leurs fiches
+function openBriefing(cs) {
+  const def = contractDef(cs.id);
+  const s = `<p class="lead">${esc(def.what)}</p>
+${def.notions.length ? `<h4>Ce que tu vas apprendre</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); return f ? `<article class="ncard"><b>📘 ${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small" data-f="${id}">Lire la fiche</button></article>` : ''; }).join('')}</div>` : ''}
+<p class="note">Le guide pas à pas est dans le panneau de droite. À chaque étape, le bouton « 👉 Montrer » t'amène au bon endroit et « Pourquoi ? » ouvre la fiche de cours.</p>
+<div class="btnrow"><button class="btn primary big" data-close>C'est parti</button></div>`;
+  modal(`${def.mission ? 'Mission' : 'Contrat'} : ${def.client}`, s, m => m.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => openFiches(b.dataset.f))));
+}
+// Après la livraison : ce qu'il faut retenir, le quiz, la suite
+function openDebrief(cs, def) {
+  const idx = CONTRACTS.findIndex(c => c.id === cs.id), next = CONTRACTS[idx + 1];
+  const newChap = next && next.chap !== def.chap ? CHAPTERS.find(x => x.n === next.chap) : null;
+  const s = `<p class="lead">+${money(def.bonus)} et +40 XP${def.rev ? `, puis ${money(def.rev)} par heure tant que le service tourne` : ''}.</p>
+${def.unlock.length ? `<p>🔓 Débloqué : <b>${def.unlock.map(u => esc(unlockName(u))).join(', ')}</b></p>` : ''}
+${def.notions.length ? `<h4>À retenir</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); if (!f) return ''; const q = S.codex.quiz[id] || {}, nq = Object.keys(q).length; return `<article class="ncard"><b>📘 ${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small ${nq < f.quiz.length ? 'primary' : ''}" data-f="${id}">${nq < f.quiz.length ? `Faire le quiz (${f.quiz.length - nq} question${f.quiz.length - nq > 1 ? 's' : ''})` : 'Quiz terminé ✓'}</button></article>`; }).join('')}</div><p class="note">Chaque bonne réponse au quiz rapporte 10 XP et 60 €.</p>` : ''}
+${TEACH[cs.id] ? `<p class="warnbox">⚠️ Reste attentif : une panne liée à ce que tu viens d'installer va bientôt arriver. Elle s'ouvrira en ticket.</p>` : ''}
+${newChap ? `<p class="infobox">🏁 Chapitre ${def.chap} terminé ! Prochain chapitre : <b>${esc(newChap.name)}</b>. ${esc(newChap.desc)}</p>` : next ? `<p class="muted">Prochain contrat : <b>${esc(next.client)}</b>.</p>` : ''}
+<div class="btnrow"><button class="btn primary big" data-close>Continuer</button></div>`;
+  modal(def.mission ? `Mission réussie : ${def.client}` : `Contrat livré : ${def.client}`, s, m => m.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => openFiches(b.dataset.f))));
+}
+
 
 /* ----- Équipement ----- */
 function sideEquip() {
@@ -254,7 +384,7 @@ function equipDev(d) {
   s += `</header><p class="muted">${esc(c.desc || '')}</p>`;
   if (c.psu) s += `<div class="kv"><span>Consommation</span><b>${live(() => Math.round(D.draw[d.id] || 0) + ' W')}</b><span>Charge</span><b>${live(() => Math.round((D.util[d.id] || 0) * 100) + ' %')}</b></div>`;
   s += `<div class="btnrow">`;
-  if (k !== 'blank' && k !== 'cm') s += `<button class="btn" data-act="win" data-id="${d.id}" title="Ou double-clic sur l'équipement">Fenêtre de config</button>`;
+  if (k !== 'blank' && k !== 'cm') s += `<button class="btn primary" data-act="win" data-id="${d.id}" title="Ou double-clic sur l'équipement">Ouvrir la fenêtre</button>`;
   if (k !== 'odf' && kindOf(d) !== 'blank' && kindOf(d) !== 'cm' && k !== 'rogue') s += `<button class="btn" data-act="console" data-id="${d.id}">Console</button>`;
   if (!c.fixed && k !== 'rogue') s += `<button class="btn" data-act="move" data-id="${d.id}">Déplacer</button>`;
   if (c.psu && k !== 'rogue') s += `<button class="btn" data-act="power" data-id="${d.id}">${d.on ? 'Éteindre' : 'Allumer'}</button>`;
@@ -265,7 +395,7 @@ function equipDev(d) {
     d.psus.forEach((p, i) => {
       const live2 = p.out && pduLive(d.rack, p.out.pdu);
       s += `<li>${stDot(!p.ok ? 'bad' : live2 ? 'ok' : 'down')} <b>PSU${i + 1}</b> <span class="muted">${!p.ok ? 'en panne' : p.out ? `PDU ${p.out.pdu}, prise ${p.out.i + 1}${live2 ? '' : ' (sans courant)'}` : 'non branchée'}</span>
-      <span class="btnrow">${!p.out ? `<button class="btn small" data-act="plug" data-id="${d.id}" data-i="${i}" data-p="A">PDU A</button><button class="btn small" data-act="plug" data-id="${d.id}" data-i="${i}" data-p="B">PDU B</button>` : `<button class="btn small" data-act="unplug" data-id="${d.id}" data-i="${i}">Débrancher</button>`}${!p.ok ? `<button class="btn small primary" data-act="psurep" data-id="${d.id}" data-i="${i}">Remplacer (180 $)</button>` : ''}</span></li>`;
+      <span class="btnrow">${!p.out ? `<button class="btn small" data-act="plug" data-id="${d.id}" data-i="${i}" data-p="A">PDU A</button><button class="btn small" data-act="plug" data-id="${d.id}" data-i="${i}" data-p="B">PDU B</button>` : `<button class="btn small" data-act="unplug" data-id="${d.id}" data-i="${i}">Débrancher</button>`}${!p.ok ? `<button class="btn small primary" data-act="psurep" data-id="${d.id}" data-i="${i}">Remplacer (180 €)</button>` : ''}</span></li>`;
     });
     s += `</ul>`;
     const outs = d.psus.filter(p => p.out).map(p => p.out.pdu);
@@ -322,7 +452,7 @@ function raidFormula(d) {
   const n = A.n, sz = A.size.toLocaleString('fr-FR');
   return ({ none: `${n} × ${sz} To, sans protection`, '0': `${n} × ${sz} = ${(n * A.size).toFixed(2)} To, aucune tolérance`, '1': `miroir : ${sz} To utiles sur ${n} disques`, '5': `(N − 1) × taille = ${n - 1} × ${sz} To`, '6': `(N − 2) × taille = ${n - 2} × ${sz} To`, '10': `N / 2 × taille = ${n / 2} × ${sz} To` })[d.raid];
 }
-function equipPort(d, pid) {
+function equipPort(d, pid, part) {
   const p = portDef(d, pid), c = portCable(d.id, pid), L = c && D.link[c.id], kc = hasCfg(d, p) ? cfg(d, pid) : null;
   let s = crumb(d, pid) + `<article class="card"><header><div><div class="eyebrow">${portTypeName(p.t)} · ${speedName(p.speed)}${p.role ? ' · ' + p.role : ''}</div><h3>${esc(pid)}</h3></div>`;
   s += kc && kc.err ? pill('bad', 'err-disabled') : kc && !kc.admin ? pill('down', 'shutdown') : c ? (L.up ? pill(L.dmg || L.mismatch ? 'warn' : 'ok', L.dmg ? 'Erreurs CRC' : L.mismatch ? 'Duplex incohérent' : 'Lien actif') : pill('bad', 'Lien coupé')) : pill('off', 'Libre');
@@ -348,9 +478,16 @@ function equipPort(d, pid) {
   }
   if (c) s += `<div class="btnrow"><button class="btn" data-act="cablerep" data-id="${c.id}">Remplacer le câble</button><button class="btn danger" data-act="unplugc" data-id="${c.id}">Débrancher</button></div>`;
   s += `</article>`;
+  if (part === 'phys') return s + (kc ? `<button class="btn primary" data-act="cfgport" data-id="${d.id}" data-p="${esc(pid)}">⚙️ Configurer ce port (VLAN, mode…)</button>` : '');
+  return s + equipPortCfg(d, pid) + cliBox(d);
+}
+// Réglages d'un port de switch ou de pare-feu
+function equipPortCfg(d, pid) {
+  const p = portDef(d, pid), kc = hasCfg(d, p) ? cfg(d, pid) : null;
+  let s = '';
   if (kc) {
     const isFw = kindOf(d) === 'fw';
-    s += `<article class="card"><h4>Configuration du port</h4>
+    s += `<article class="card"><h4>Configuration du port ${esc(pid)}</h4>
 <label class="fld chk"><input type="checkbox" data-act="pcfg" data-f="admin" data-id="${d.id}" data-p="${esc(pid)}" ${kc.admin ? 'checked' : ''}> Port activé (<code>${kc.admin ? 'no shutdown' : 'shutdown'}</code>)</label>
 <label class="fld">Mode <select data-act="pcfg" data-f="mode" data-id="${d.id}" data-p="${esc(pid)}"><option value="access" ${kc.mode === 'access' ? 'selected' : ''}>access : un seul VLAN</option><option value="trunk" ${kc.mode === 'trunk' ? 'selected' : ''}>trunk : plusieurs VLAN étiquetés 802.1Q</option></select></label>`;
     if (kc.mode === 'access') s += `<label class="fld">VLAN <select data-act="pcfg" data-f="vlan" data-id="${d.id}" data-p="${esc(pid)}">${VLAN_IDS.map(v => `<option value="${v}" ${kc.vlan === v ? 'selected' : ''}>${v} · ${VLANS[v].name}</option>`).join('')}</select></label>`;
@@ -365,7 +502,7 @@ function equipPort(d, pid) {
     if (kc.err) s += `<p class="warnbox">Port err-disabled (${esc(kc.err)}). Retire la cause, puis décoche et recoche « Port activé » (shutdown / no shutdown).</p>`;
     s += `</article>`;
   }
-  return s + cliBox(d);
+  return s;
 }
 function equipCable(c) {
   const ct = CABLES[c.type], L = D.link[c.id] || {};
@@ -477,16 +614,23 @@ function collectChip(t) {
 /* ----- Réseau ----- */
 function sideNetwork() {
   let s = `<article class="card"><h4>Plan d'adressage</h4><table class="ptable"><thead><tr><th>VLAN</th><th>Réseau</th><th>Passerelle</th></tr></thead><tbody>${VLAN_IDS.filter(v => v !== 1).map(v => `<tr><td><i class="vl" style="background:${VLANS[v].color}"></i>${v} ${VLANS[v].name}</td><td class="mono">${VLANS[v].net}.0/24</td><td class="mono">${VLANS[v].gw || '—'}</td></tr>`).join('')}</tbody></table><p class="muted">VLAN 30 non routé : seul un hôte branché dans ce VLAN atteint le stockage.</p></article>`;
+  return s + ruleCard() + protectCard();
+}
+// Matrice de flux : utilisée dans l'onglet Réseau et dans la fenêtre du pare-feu
+function ruleCard() {
   const dr = UI.ruleDraft;
   const zones = ['Internet', 'DMZ', 'SERVEURS', 'ADMIN', 'STOCKAGE', 'any'];
-  s += `<article class="card"><h4>Matrice de flux du pare-feu</h4><p class="muted">Politique par défaut : tout refuser. Chaque ligne autorise un flux ; les réponses reviennent seules (pare-feu avec état).</p>`;
+  let s = `<article class="card rulecard"><h4>Matrice de flux du pare-feu</h4><p class="muted">Politique par défaut : tout refuser. Chaque ligne autorise un flux ; les réponses reviennent seules (pare-feu avec état).</p>`;
   s += `<table class="ptable rules"><thead><tr><th>Source</th><th>Destination</th><th>Port</th><th></th></tr></thead><tbody>`;
   S.rules.forEach((r, i) => { const risk = ruleRisk(r); s += `<tr class="${risk ? 'risky' : ''}"><td>${r.src}</td><td>${r.dst}</td><td class="mono">${r.proto.toUpperCase()} ${r.port}</td><td><button class="link" data-act="delrule" data-i="${i}" aria-label="Supprimer la règle">Suppr.</button></td></tr>${risk ? `<tr class="risky"><td colspan="4">⚠ ${esc(risk)}</td></tr>` : ''}`; });
   if (!S.rules.length) s += `<tr><td colspan="4" class="muted">Aucune règle : tout est refusé.</td></tr>`;
-  s += `</tbody></table><div class="ruleform"><label class="fld">Source <select id="rSrc">${zones.map(z => `<option ${dr.src === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Destination <select id="rDst">${zones.map(z => `<option ${dr.dst === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Protocole <select id="rProto">${['tcp', 'udp', 'any'].map(z => `<option ${dr.proto === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Port <input id="rPort" type="text" value="${esc(dr.port)}" inputmode="numeric" placeholder="443 ou any"></label></div><button class="btn primary" data-act="addrule">Ajouter la règle</button>`;
-  s += `<p class="muted mono" id="nftprev">${esc(nftLine({ src: dr.src, dst: dr.dst, proto: dr.proto, port: dr.port === 'any' ? 'any' : +dr.port || dr.port }))}</p></article>`;
-  s += `<article class="card"><h4>Protection</h4><label class="fld chk"><input type="checkbox" data-act="syn" ${S.fwopt.syn ? 'checked' : ''}> Limiter les SYN (contre le SYN flood)</label><button class="btn small" data-act="scrub" ${S.fwopt.scrub ? 'disabled' : ''}>${S.fwopt.scrub ? 'Filtrage opérateur actif' : "Demander le filtrage anti-DDoS à l'opérateur (600 $)"}</button>${S.fwopt.block.length ? `<p class="muted mono">Bloquées : ${S.fwopt.block.join(', ')}</p>` : ''}${blockForm()}</article>`;
-  return s;
+  s += `</tbody></table><div class="ruleform"><label class="fld">Source <select class="r-src">${zones.map(z => `<option ${dr.src === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Destination <select class="r-dst">${zones.map(z => `<option ${dr.dst === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Protocole <select class="r-proto">${['tcp', 'udp', 'any'].map(z => `<option ${dr.proto === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Port <input class="r-port" type="text" value="${esc(dr.port)}" inputmode="numeric" placeholder="443 ou any"></label></div><button class="btn primary" data-act="addrule">Ajouter la règle</button>`;
+  return s + `<p class="muted mono nftprev">${esc(nftLine({ src: dr.src, dst: dr.dst, proto: dr.proto, port: dr.port === 'any' ? 'any' : +dr.port || dr.port }))}</p></article>`;
+}
+function ruleRead(card) { const q = c => card.querySelector(c).value; return { src: q('.r-src'), dst: q('.r-dst'), proto: q('.r-proto'), port: q('.r-port').trim().toLowerCase() }; }
+function rulePreview(card) { const r = ruleRead(card); UI.ruleDraft = { ...r }; card.querySelector('.nftprev').textContent = nftLine({ ...r, port: r.port === 'any' ? 'any' : +r.port || r.port }); }
+function protectCard() {
+  return `<article class="card"><h4>Protection</h4><label class="fld chk"><input type="checkbox" data-act="syn" ${S.fwopt.syn ? 'checked' : ''}> Limiter les SYN (contre le SYN flood)</label><button class="btn small" data-act="scrub" ${S.fwopt.scrub ? 'disabled' : ''}>${S.fwopt.scrub ? 'Filtrage opérateur actif' : "Demander le filtrage anti-DDoS à l'opérateur (600 €)"}</button>${S.fwopt.block.length ? `<p class="muted mono">Bloquées : ${S.fwopt.block.join(', ')}</p>` : ''}${blockForm()}</article>`;
 }
 
 /* ----- Salle : énergie, froid, opérateurs ----- */
@@ -642,7 +786,7 @@ function openFiches(id) {
         const q = f.quiz[i], ans = +sel.value;
         S.codex.quiz[f.id] = S.codex.quiz[f.id] || {};
         S.codex.quiz[f.id][i] = ans;
-        if (ans === q.a) { S.xp += 10; S.money += 60; toast('Bonne réponse : +10 XP, +60 $', 'good'); }
+        if (ans === q.a) { S.xp += 10; S.money += 60; toast('Bonne réponse : +10 XP, +60 €', 'good'); }
         S.codex.seen[f.id] = true;
         m.querySelector('.mbody').innerHTML = render(f); bind(f); renderTop();
       }));
@@ -710,18 +854,20 @@ function openRecette(cs) {
   }, true);
 }
 function openHelp(first) {
-  const s = `<p>Tu prends en charge une salle de datacenter vide : six rangées, l'électricité secourue et un climatiseur. Tu as ${money(ECO.start)}. Des clients signent des contrats : à toi d'installer les baies et le matériel, de câbler, configurer, tester et maintenir.</p>
-<div class="two help"><div><h4>La salle</h4><ul><li>Marche avec les <b>flèches</b> ou <b>ZQSD</b>, ou clique sur le sol.</li><li>Clique un <b>emplacement libre</b> pour installer une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les <b>climatiseurs</b> sont le long des murs, l'<b>électricité</b> dans le local à droite, les <b>opérateurs</b> en salle MMR à gauche.</li><li>Couches <b>Chaleur</b> et <b>Énergie</b> en haut à gauche.</li></ul></div>
-<div><h4>Dans une baie</h4><ul><li><b>Face avant</b> : disques, voyants. <b>Face arrière</b> : ports, alimentations, PDU A (rouge) et B (bleu). Touche F.</li><li><b>Double-clique</b> un équipement pour ouvrir sa fenêtre de configuration, que tu peux déplacer et garder ouverte à côté d'autres.</li><li>Clique un <b>port libre</b> puis un second, dans la même baie ou une autre, pour poser un câble.</li><li>Chaque contrat se livre par une <b>recette</b> : une série de tests réels.</li><li>Les pannes arrivent en tickets : définir, collecter (console), corriger, documenter.</li></ul></div></div>
-<p class="note">Raccourcis : Échap annule ou revient à la salle, F bascule face avant / arrière, Espace met en pause.</p>
-<div class="btnrow">${first ? '<button class="btn primary" id="hGo">Signer le premier contrat : Le Fournil</button>' : ''}<button class="btn" id="hFiche">Ouvrir les fiches</button><button class="btn" data-close>Fermer</button>${first ? '' : '<button class="btn danger" id="hReset">Nouvelle partie</button>'}</div>`;
-  modal(first ? 'Bienvenue dans la salle 01' : 'Aide', s, m => {
-    const go = m.querySelector('#hGo'); if (go) go.addEventListener('click', () => { actAccept('c1'); UI.tab = 'contracts'; closeModal(); derive(); renderAll(); });
+  const s = `<p class="lead">Tu reprends une salle de datacenter vide. Des clients signent des contrats : tu installes le matériel, tu câbles, tu configures et tu testes. Chaque contrat t'apprend une notion du BTS SIO SISR, des plus simples aux plus avancées.</p>
+<ol class="howto"><li><b>🎯 Lis ton contrat</b> dans le panneau de droite : il donne les étapes, une par une.</li><li><b>👉 Clique « Montrer »</b> : le jeu t'amène au bon endroit.</li><li><b>📘 Ouvre la fiche</b> de chaque notion (« Pourquoi ? ») et fais son quiz.</li></ol>
+<div class="two help"><div><h4>🏢 Dans la salle</h4><ul><li>Marche avec les <b>flèches</b> ou <b>ZQSD</b>, ou clique sur le sol.</li><li>Clique un <b>emplacement libre</b> pour poser une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les opérateurs arrivent en <b>salle MMR</b> (à gauche), l'électricité dans le <b>local</b> à droite.</li></ul></div>
+<div><h4>🗄️ Dans une baie</h4><ul><li><b>F</b> : face avant (disques) ou arrière (ports et prises). PDU A en rouge, B en bleu.</li><li><b>Double-clic</b> sur un équipement : sa fenêtre avec les onglets Physique, Config, CLI et Aide.</li><li>Clique un <b>port libre</b>, puis un second : tu poses un câble.</li></ul></div></div>
+<p class="note">Échap annule ou revient à la salle · F tourne la baie · Espace met en pause.</p>
+<div class="btnrow">${first ? '<button class="btn primary big" id="hGo">🚀 Commencer : ta première baie</button>' : ''}<button class="btn" id="hFiche">📚 Fiches de cours</button><button class="btn" data-close>Fermer</button>${first ? '' : '<button class="btn danger" id="hReset">Nouvelle partie</button>'}</div>`;
+  modal(first ? 'Bienvenue dans ton datacenter' : 'Aide', s, m => {
+    const go = m.querySelector('#hGo'); if (go) go.addEventListener('click', () => { actAccept('c1'); UI.tab = 'contracts'; closeModal(); derive(); renderAll(); const cs = S.contracts.find(c => c.id === 'c1'); if (cs) openBriefing(cs); });
     m.querySelector('#hFiche').addEventListener('click', () => openFiches('baie'));
     const rs = m.querySelector('#hReset');
-    if (rs) { let armed = false; rs.addEventListener('click', () => { if (!armed) { armed = true; rs.textContent = 'Confirmer : tout effacer ?'; return; } newState(); UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.av = { x: 1.4, y: 15.6, a: -Math.PI / 2 }; closeModal(); derive(); renderAll(); openHelp(true); }); }
+    if (rs) { let armed = false; rs.addEventListener('click', () => { if (!armed) { armed = true; rs.textContent = 'Confirmer : tout effacer ?'; return; } newState(); UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.ctOpen = {}; UI.av = { x: 1.4, y: 15.6, a: -Math.PI / 2 }; WINS.length = 0; closeModal(); derive(); renderAll(); openHelp(true); }); }
   }, true);
 }
+
 
 /* ---------- Console ---------- */
 const CONS = { tg: null, hist: {} };
@@ -749,23 +895,28 @@ function consoleRun(cmd) {
   const tg = CONS.tg, k = tgKey(tg);
   const res = runCommand(tg, cmd);
   CONS.hist[k] = (CONS.hist[k] || []).concat([`${promptOf(tg)} ${cmd}`, res, '']).slice(-400);
-  // une panne silencieuse se découvre en lançant la bonne commande au bon endroit
-  const full = matchCommand(tg, cmd) || cmd;
+  cmdDetect(tg, cmd);
+  const out = $('#cout'); out.textContent = CONS.hist[k].join('\n'); out.scrollTop = out.scrollHeight;
+}
+// Une panne silencieuse se découvre en lançant la bonne commande au bon endroit
+function cmdDetect(tg, cmd) {
+  const c = cmd.trim().replace(/^do /i, '');
+  const full = matchCommand(tg, c) || c;
+  // les commandes de diagnostic reconnues servent aussi d'objectifs (« vérifie avec show vlan brief »)
+  if (matchCommand(tg, c)) { S.flags.cmds = S.flags.cmds || {}; if (!S.flags.cmds[full]) { S.flags.cmds[full] = true; touch(); } }
   for (const t of S.tickets) {
     if (t.det || t.closed) continue;
     const def = INCIDENTS[t.type], x = t.ctx;
     const vmT = def.vmTarget && def.vmTarget(x), dT = vmT ? null : (def.target ? def.target(x) : x.d);
     if (def.cmd(x) === full && ((vmT && tg.vm === vmT) || (dT && tg.d === dT))) { detectTicket(t, 'toi, en console'); S.xp += 10; toast('Bien vu : tu as trouvé une panne silencieuse (+10 XP).', 'good'); renderAll(); }
   }
-  const out = $('#cout'); out.textContent = CONS.hist[k].join('\n'); out.scrollTop = out.scrollHeight;
 }
+// Un réglage fait avec les formulaires s'affiche aussi en commandes dans le terminal de l'équipement
 function onCli(d, lines) {
-  if (!d) return;
-  if (CONS.tg && CONS.tg.d === d.id && !$('#console').hidden) {
-    const k = tgKey(CONS.tg);
-    CONS.hist[k] = (CONS.hist[k] || []).concat(['! configuration appliquée depuis l’interface :', ...lines.map(l => (d && ['switch', 'router'].includes(kindOf(d)) ? `${d.host}(config)# ` : '# ') + l), '']);
-    renderConsole();
-  }
+  if (!d || CLI_SELF) return;
+  const k = 'd:' + d.id;
+  CONS.hist[k] = (CONS.hist[k] || []).concat(['! appliqué depuis l’onglet Config :', ...lines.map(l => (isIOS(d) ? `${d.host}(config)# ` : '# ') + l)]).slice(-400);
+  if (CONS.tg && CONS.tg.d === d.id && !$('#console').hidden) renderConsole();
 }
 $('#cform').addEventListener('submit', e => { e.preventDefault(); const v = $('#cin').value; if (!v.trim()) return; consoleRun(v); $('#cin').value = ''; });
 $('#cchips').addEventListener('click', e => { const b = e.target.closest('[data-cmd]'); if (b) consoleRun(b.dataset.cmd); });
@@ -775,9 +926,10 @@ $('#cclose').addEventListener('click', () => { $('#console').hidden = true; });
 /* ---------- Événements du jeu ---------- */
 function onTicket(t) { toast(`Ticket n° ${t.id} : ${INCIDENTS[t.type].title}`, 'bad', () => { UI.tab = 'tickets'; UI.openTicket = t.id; renderAll(); }); }
 function onTicketFixed(t) { toast(`Ticket n° ${t.id} corrigé : rédige le rapport`, 'good', () => { UI.tab = 'tickets'; renderAll(); openReport(t); }); }
+function onInternet(I) { toast(I.ok ? 'Accès Internet actif.' : 'Internet coupé : ' + I.why, I.ok ? 'good' : 'bad'); }
 function onFiche(f) { toast(`Nouvelle notion : ${f.title} (ouvrir la fiche)`, 'info', () => openFiches(f.id)); }
 const _onContract = onContractActive;
-onContractActive = function (cs, def) { _onContract(cs, def); toast(`Contrat ${def.client} en service : +${money(def.bonus)}`, 'gold'); if (def.final) setTimeout(() => modal('Architecte datacenter', `<p>Le contrat de l'hébergeur régional tourne avec deux opérateurs et des services répartis. Tu as monté une salle complète, du câble au service.</p><p>Les contrats continuent d'arriver. Continue à optimiser : PUE, redondance, sécurité.</p><div class="btnrow"><button class="btn primary" data-close>Continuer</button></div>`), 600); };
+onContractActive = function (cs, def) { _onContract(cs, def); toast(`${def.mission ? 'Mission' : 'Contrat'} ${def.client} réussi : +${money(def.bonus)}`, 'gold'); if (!def.final) setTimeout(() => openDebrief(cs, def), 60); if (def.final) setTimeout(() => modal('Architecte datacenter', `<p>Le contrat de l'hébergeur régional tourne avec deux opérateurs et des services répartis. Tu as monté une salle complète, du câble au service.</p><p>Les contrats continuent d'arriver. Continue à optimiser : PUE, redondance, sécurité.</p><div class="btnrow"><button class="btn primary" data-close>Continuer</button></div>`), 600); };
 
 /* ---------- Sélection et clics ---------- */
 /* ---------- Navigation salle / baie ---------- */
@@ -855,19 +1007,42 @@ function roomClick(e, el) {
   if (k === 'crac' || k === 'cracslot') { const slot = +ds.slot, p = CRAC_SLOTS[slot]; walkTo({ x: p.x + CRAC_W / 2, y: p.y < 8 ? p.y + CRAC_H + 0.4 : p.y - 0.4 }); select({ t: k, slot }); return; }
   if (k === 'infra') { const b = INFRA[ds.id]; walkTo({ x: b.x - 0.4, y: b.y + b.h / 2 }); select({ t: 'infra', id: ds.id }); return; }
 }
-/* ---------- Fenêtres de configuration (double-clic) ---------- */
+/* ---------- Fenêtres d'équipement (double-clic) : onglets Physique, Config, CLI, Aide ---------- */
 const WINS = [];
 let winZ = 50, winSeq = 0;
+// Fiches de cours liées à chaque type d'équipement (onglet Aide)
+const KIND_FICHES = { switch: ['switch', 'cuivre', 'fibre', 'l2sec'], router: ['acl', 'ip', 'archi', 'fibre'], fw: ['pf', 'ports', 'attaques'], server: ['virtu', 'raid', 'elec'], nas: ['raid', 'bak'], odf: ['fibre', 'archi'], cm: ['baie'], blank: ['baie', 'froid'], rogue: ['l2sec'] };
+const INFRA_FICHES = { tgbt: ['onduleur', 'elec'], upsA: ['onduleur', 'elec'], upsB: ['onduleur', 'elec'], batA: ['onduleur'], batB: ['onduleur'], gen: ['onduleur'] };
+// Mode d'emploi en trois étapes, affiché en tête de l'onglet Aide
+const KIND_GUIDE = {
+  switch: ["Branche les câbles des serveurs et du pare-feu sur les ports (onglet Physique).", "Onglet Config : mets chaque port vers un serveur en mode access, dans le VLAN de son service.", "Le port vers le pare-feu passe en trunk : il transporte plusieurs VLAN étiquetés 802.1Q."],
+  router: ["Le routeur relie la salle aux opérateurs (fibres OP1 et OP2, via l'ODF) et parle BGP avec eux. Son port LAN va vers le pare-feu.", "Onglet Config : une ACL trie ce qui arrive d'Internet. Lue de haut en bas, la première ligne qui correspond décide.", "Onglet CLI : « show bgp summary » pour les opérateurs, « show access-lists » pour les compteurs de l'ACL."],
+  fw: ["Le port côté Internet va vers le routeur, le port LAN vers le switch.", "Onglet Config : le port LAN passe en trunk avec les VLAN à router.", "La matrice de flux autorise uniquement les flux du contrat : tout le reste est refusé."],
+  server: ["Branche ses deux alimentations : une sur le PDU A, l'autre sur le PDU B.", "Relie une carte réseau au switch (onglet Physique, clic sur un port).", "Onglet Config : choisis le RAID, puis déploie les VM depuis le contrat."],
+  nas: ["Branche ses alimentations sur A et B, puis relie-le au switch.", "Ajoute des disques en face avant et choisis un niveau RAID.", "Les VM peuvent y stocker leurs disques (VLAN 30 STOCKAGE)."],
+  odf: ["L'ODF reçoit les fibres des opérateurs (OP1, OP2).", "Relie OP1 au routeur avec une fibre monomode (OS2) et des modules LR.", "Sans ce lien, la salle n'a pas d'accès Internet."],
+};
+function winKind(w) { return w.spec.d ? kindOf(dev(w.spec.d)) : null; }
+function winTabsOf(w) {
+  if (!w.spec.d) return [['phys', '🔌 Physique'], ['aide', '📘 Aide']];
+  const k = winKind(w);
+  if (['cm', 'blank', 'rogue', 'odf'].includes(k)) return [['phys', '🔌 Physique'], ['aide', '📘 Aide']];
+  return [['phys', '🔌 Physique'], ['cfg', '⚙️ Config'], ['cli', '⌨️ CLI'], ['aide', '📘 Aide']];
+}
 function openWin(spec) {
   const key = spec.d ? 'd:' + spec.d : spec.infra ? 'i:' + spec.infra : 'c:' + spec.crac;
   let w = WINS.find(x => x.key === key);
   if (!w) {
     const n = WINS.length, box = $('#view').getBoundingClientRect();
-    w = { key, spec, id: 'win' + (++winSeq), view: spec.d ? (spec.p ? { t: 'port', d: spec.d, p: spec.p } : { t: 'dev', d: spec.d }) : null,
-      x: Math.max(8, Math.min(box.left + 60 + n * 34, window.innerWidth - 440)), y: Math.max(70, box.top + 50 + n * 30), z: ++winZ };
+    w = { key, spec, id: 'win' + (++winSeq), view: { t: 'dev', d: spec.d }, tab: 'phys', cfgPort: null, fiche: 0, draft: '',
+      x: Math.max(8, Math.min(box.left + 60 + n * 34, window.innerWidth - 500)), y: Math.max(70, box.top + 50 + n * 30), z: ++winZ };
     WINS.push(w);
     if (WINS.length > 4) WINS.shift();
-  } else { w.z = ++winZ; if (spec.p) w.view = { t: 'port', d: spec.d, p: spec.p }; }
+  } else w.z = ++winZ;
+  if (spec.p) {
+    const d = dev(spec.d), pd = portDef(d, spec.p);
+    if (hasCfg(d, pd)) { w.tab = 'cfg'; w.cfgPort = spec.p; } else { w.tab = 'phys'; w.view = { t: 'port', d: spec.d, p: spec.p }; }
+  }
   renderWins(true);
   const el = document.getElementById(w.id); if (el) el.querySelector('.x').focus();
 }
@@ -879,16 +1054,211 @@ function winTitle(w) {
   return [nameOf(d), `${CAT[d.type].name} · ${S.racks[d.rack].row === 'MMR' ? 'salle MMR' : 'baie ' + rackName(d.rack)}, U${d.u}`];
 }
 function winBody(w) {
+  if (w.tab === 'aide') return winAide(w);
   if (w.spec.infra) return equipInfra(w.spec.infra);
   if (w.spec.crac !== undefined) return equipCrac(w.spec.crac);
-  const v = w.view, d = v.d ? dev(v.d) : null;
-  if (v.t === 'port' && d) return equipPort(d, v.p);
-  if (v.t === 'disk' && d) return equipDisk(d, v.bay);
-  if (v.t === 'psu' && d) return equipPsu(d, v.i);
-  if (v.t === 'cable') { const c = S.cables.find(x => x.id === v.c); if (c) return crumb(dev(w.spec.d), 'câble') + equipCable(c); }
-  if (v.t === 'vm') { const vm = S.vms.find(x => x.id === v.id); if (vm) return equipVm(vm); }
-  return equipDev(dev(w.spec.d));
+  const d = dev(w.spec.d);
+  if (w.tab === 'cfg') return winCfg(w, d);
+  if (w.tab === 'cli') return winCli(w, d);
+  return winPhys(w, d);
 }
+
+/* ----- Onglet Physique : alimentations, ports, câbles, disques ----- */
+function winPhys(w, d) {
+  const v = w.view;
+  if (v.t === 'port') return equipPort(d, v.p, 'phys');
+  if (v.t === 'disk') return equipDisk(d, v.bay);
+  if (v.t === 'psu') return equipPsu(d, v.i);
+  if (v.t === 'cable') { const c = S.cables.find(x => x.id === v.c); if (c) return crumb(d, 'câble') + equipCable(c); }
+  if (v.t === 'vm') { const vm = S.vms.find(x => x.id === v.id); if (vm) return equipVm(vm); }
+  const c = CAT[d.type], k = c.kind;
+  let s = `<article class="card"><header><div><div class="eyebrow">${esc(c.name)} · U${d.u}${c.u > 1 ? '–' + (d.u + c.u - 1) : ''}</div><h3>${esc(nameOf(d))}</h3></div>`;
+  s += c.psu ? (D.powered[d.id] ? pill(devAlarm(d) ? 'warn' : 'ok', devAlarm(d) ? 'Alarme' : 'Sous tension') : pill('bad', d.thermalOff ? 'Arrêt thermique' : 'Hors tension')) : pill('offer', 'Passif');
+  s += `</header><p class="muted">${esc(c.desc || '')}</p>`;
+  if (c.psu) s += `<div class="kv"><span>Consommation</span><b>${live(() => Math.round(D.draw[d.id] || 0) + ' W')}</b><span>Charge</span><b>${live(() => Math.round((D.util[d.id] || 0) * 100) + ' %')}</b></div>`;
+  s += `<div class="btnrow">`;
+  if (c.psu && k !== 'rogue') s += `<button class="btn" data-act="power" data-id="${d.id}">${d.on ? '⏻ Éteindre' : '⏻ Allumer'}</button>`;
+  if (!c.fixed && k !== 'rogue') s += `<button class="btn" data-act="move" data-id="${d.id}">Déplacer</button>`;
+  if (!c.fixed) s += `<button class="btn danger" data-act="remove" data-id="${d.id}">${k === 'rogue' ? 'Débrancher et retirer' : 'Retirer'}</button>`;
+  s += `</div></article>`;
+  if (c.psu && k !== 'rogue') {
+    s += `<article class="card"><h4>🔌 Alimentations</h4><ul class="plist">`;
+    d.psus.forEach((p, i) => {
+      const lv = p.out && pduLive(d.rack, p.out.pdu);
+      s += `<li>${stDot(!p.ok ? 'bad' : lv ? 'ok' : 'down')} <b>PSU${i + 1}</b> <span class="muted">${!p.ok ? 'en panne' : p.out ? `PDU ${p.out.pdu}, prise ${p.out.i + 1}${lv ? '' : ' (sans courant)'}` : 'non branchée'}</span>
+      <span class="btnrow">${!p.out ? `<button class="btn small" data-act="plug" data-id="${d.id}" data-i="${i}" data-p="A">PDU A</button><button class="btn small" data-act="plug" data-id="${d.id}" data-i="${i}" data-p="B">PDU B</button>` : `<button class="btn small" data-act="unplug" data-id="${d.id}" data-i="${i}">Débrancher</button>`}${!p.ok ? `<button class="btn small primary" data-act="psurep" data-id="${d.id}" data-i="${i}">Remplacer (180 €)</button>` : ''}</span></li>`;
+    });
+    s += `</ul>`;
+    const outs = d.psus.filter(p => p.out).map(p => p.out.pdu);
+    if (d.psus.length === 2 && outs.length === 2 && outs[0] === outs[1]) s += `<p class="warnbox">Les deux PSU sont sur le PDU ${outs[0]} : si la voie ${outs[0]} tombe, l'équipement s'éteint. Mets l'une sur A et l'autre sur B.</p>`;
+    if (d.psus.length === 1) s += `<p class="note">Une seule alimentation : c'est un point unique de panne.</p>`;
+    s += `</article>`;
+  }
+  if (k === 'server' || k === 'nas') s += `<article class="card"><h4>💽 Disques (face avant)</h4><div class="bays">${d.disks.map((x, i) => `<button class="baybtn ${x ? x.st : 'empty'}" data-act="seldisk" data-id="${d.id}" data-bay="${i}" title="Baie ${i}">${i}<small>${x ? (x.type === 'ssd' ? 'SSD' : 'HDD') : '+'}</small></button>`).join('')}</div><p class="muted">Clique une baie pour ajouter ou remplacer un disque. Le RAID se règle dans l'onglet Config.</p></article>`;
+  if (k === 'router') s += `<article class="card"><h4>🌐 Opérateurs</h4><div class="kv"><span>Accès Internet</span><b>${live(() => D.inet.ok ? `${D.inet.ops} lien(s), ${speedName(D.inet.cap)}` : 'coupé')}</b><span>Trafic Internet</span><b>${live(() => speedName(Math.round(D.inetUse || 0)))}</b></div>${D.inet.ok ? '' : `<p class="warnbox">${esc(D.inet.why)}</p>`}</article>`;
+  if (c.ports.length) {
+    s += `<article class="card"><h4>🔗 Ports et câbles</h4><p class="muted">Clique un port pour le câbler ou voir son câble.</p><table class="ptable"><thead><tr><th>Port</th><th>Lien</th><th>Relié à</th></tr></thead><tbody>`;
+    for (const p of c.ports) {
+      const cb = portCable(d.id, p.id), L = cb && D.link[cb.id], kc = hasCfg(d, p) ? cfg(d, p.id) : null;
+      const st = kc && kc.err ? ['bad', 'err-disabled'] : kc && !kc.admin ? ['down', 'éteint'] : cb ? (L.up ? (L.dmg || L.mismatch ? ['warn', 'erreurs'] : ['ok', 'actif']) : ['down', 'coupé']) : ['off', 'libre'];
+      const peer = cb ? otherEnd(cb, d.id, p.id) : null;
+      s += `<tr data-act="selport" data-id="${d.id}" data-p="${esc(p.id)}" tabindex="0"><td><b>${esc(p.id)}</b> <span class="muted">${portTypeName(p.t)}${p.role ? ' · ' + p.role : ''}</span></td><td>${stDot(st[0])} ${st[1]}</td><td>${peer ? esc(nameOf(dev(peer.d)) + ' ' + peer.p) : '<span class="muted">—</span>'}</td></tr>`;
+    }
+    s += `</tbody></table></article>`;
+  }
+  return s;
+}
+
+/* ----- Onglet Config : ce qui se règle sur l'équipement ----- */
+function winCfg(w, d) {
+  const k = kindOf(d);
+  let s = '';
+  if (k === 'switch' || k === 'fw') {
+    const ports = CAT[d.type].ports.filter(p => hasCfg(d, p));
+    if (!w.cfgPort || !ports.some(p => p.id === w.cfgPort)) w.cfgPort = (ports.find(p => portCable(d.id, p.id)) || ports[0] || {}).id;
+    s += k === 'switch'
+      ? `<p class="infobox"><b>Un port, un rôle.</b> Vers un serveur : <b>access</b> dans le VLAN du service. Vers le pare-feu ou un autre switch : <b>trunk</b>, qui transporte plusieurs VLAN étiquetés (802.1Q).</p>`
+      : `<p class="infobox"><b>Le pare-feu route entre les VLAN.</b> Son port LAN passe en trunk avec les VLAN à router. La matrice de flux dit qui a le droit de parler à qui.</p>`;
+    if (w.cfgPort) s += equipPortCfg(d, w.cfgPort);
+    s += `<article class="card"><h4>Toutes les interfaces</h4><p class="muted">Clique une ligne pour régler ce port.</p><div class="tscroll"><table class="ptable"><thead><tr><th>Port</th><th>Relié à</th><th>Mode</th><th>État</th></tr></thead><tbody>`;
+    for (const p of ports) {
+      const kc = cfg(d, p.id), cb = portCable(d.id, p.id), peer = cb ? otherEnd(cb, d.id, p.id) : null;
+      const mode = kc.mode === 'access' ? `<i class="vl" style="background:${VLANS[kc.vlan].color || '#b8c4d0'}"></i>VLAN ${kc.vlan}` : `trunk ${kc.allowed.join(',') || '—'}`;
+      s += `<tr data-act="cfgport" data-id="${d.id}" data-p="${esc(p.id)}" tabindex="0" class="${w.cfgPort === p.id ? 'on' : ''}"><td><b>${esc(p.id)}</b></td><td>${peer ? esc(nameOf(dev(peer.d))) : '<span class="muted">—</span>'}</td><td>${mode}</td><td>${kc.err ? stDot('bad') + ' err' : kc.admin ? stDot(cb ? 'ok' : 'off') + ' on' : stDot('down') + ' off'}</td></tr>`;
+    }
+    s += `</tbody></table></div></article>`;
+    if (k === 'fw') s += ruleCard() + protectCard();
+  } else if (k === 'server') {
+    const c = CAT[d.type], u = hostUsed(d);
+    s += `<p class="infobox"><b>Un hyperviseur héberge des VM.</b> Choisis un RAID qui protège les disques, puis déploie les VM depuis la carte du contrat.</p>`;
+    s += storageSection(d);
+    s += `<article class="card"><h4>Mémoire et processeur</h4><div class="kv"><span>vCPU alloués</span><b>${u.vcpu} / ${c.cores} cœurs</b><span>Mémoire allouée</span><b>${u.ram} / ${d.ram} Go</b></div>${unlocked('ram') ? `<button class="btn small" data-act="ram" data-id="${d.id}" ${d.ram >= c.ramMax ? 'disabled' : ''}>Doubler la RAM (${money(d.ram / 64 * 420)})</button>` : '<p class="note">Les extensions de mémoire arrivent avec un contrat plus tard.</p>'}</article>`;
+    const vms = S.vms.filter(v => v.host === d.id);
+    s += `<article class="card"><h4>Machines virtuelles</h4>${vms.map(v => `<button class="vmrow" data-act="selvm" data-id="${v.id}">${stDot(D.vm[v.id] ? D.vm[v.id].st : 'down')} <b>${esc(v.name)}</b> <span class="muted">VLAN ${v.vlan} · ${v.ip}</span></button>`).join('') || '<p class="muted">Aucune VM. Elles se déploient depuis un contrat.</p>'}</article>`;
+  } else if (k === 'nas') {
+    s += `<p class="infobox"><b>Une baie de stockage partage ses disques en NFS</b> sur le VLAN 30. Le RAID décide combien de disques peuvent tomber sans perte.</p>`;
+    s += storageSection(d) + `<article class="card"><h4>VM stockées ici</h4>${S.vms.filter(v => v.sto === d.id).map(v => `<button class="vmrow" data-act="selvm" data-id="${v.id}">${stDot(D.vm[v.id].st)} ${esc(v.name)}</button>`).join('') || '<p class="muted">Aucune pour l’instant.</p>'}</article>`;
+  } else if (k === 'router') {
+    s += routerCfg(w, d);
+  }
+  return s + cliBox(d);
+}
+
+/* ----- Routeur : éditeur d'ACL et testeur de paquets ----- */
+const ACL_ADDR = [['any', 'n’importe qui'], ['host 203.0.113.10', 'services publics (pare-feu)'], ['host 198.51.100.1', 'opérateur 1'], ['host 198.51.100.2', 'le routeur, côté opérateur 1'],
+  ['10.99.0.0 0.0.0.255', 'réseau ADMIN 10.99.0.0/24'], ['10.0.0.0 0.255.255.255', 'privé 10.0.0.0/8'], ['172.16.0.0 0.15.255.255', 'privé 172.16.0.0/12'], ['192.168.0.0 0.0.255.255', 'privé 192.168.0.0/16']];
+const isStd = n => /^\d+$/.test(n || '') && +n < 100;
+// ACL standard : action et source seulement ; étendue : protocole, source, destination, port
+const aclDraftText = (x, std) => std ? `${x.act} ${x.src.trim() || 'any'}` : `${x.act} ${x.proto} ${x.src.trim() || 'any'} ${x.dst.trim() || 'any'}${String(x.port).trim() ? ' eq ' + String(x.port).trim() : ''}`;
+function aclWinName(d, w) {
+  const A = aclOf(d), names = Object.keys(A.lists);
+  if (!w.acl || !A.lists[w.acl]) w.acl = (A.in['Te0/0/0'] && A.lists[A.in['Te0/0/0']]) ? A.in['Te0/0/0'] : names[0] || null;
+  return w.acl;
+}
+function routerCfg(w, d) {
+  const A = aclOf(d), name = aclWinName(d, w), names = Object.keys(A.lists), std = isStd(name);
+  let s = `<p class="infobox"><b>Une ACL trie les paquets sur le routeur.</b> Elle se lit de haut en bas : la première ligne qui correspond décide, et tout le reste est refusé (deny implicite). <b>Standard</b> (1 à 99) : elle ne regarde que la source. <b>Étendue</b> (100 à 199, ou un nom) : protocole, source, destination et port.</p>`;
+  s += `<article class="card aclcard"><h4>Listes de contrôle d'accès</h4>`;
+  if (!name) {
+    s += `<p class="muted">Aucune ACL pour l'instant.</p><div class="btnrow"><button class="btn primary" data-act="aclnew" data-id="${d.id}">Créer l'ACL étendue EDGE-IN</button><button class="btn" data-act="aclnewstd" data-id="${d.id}">Créer l'ACL standard 10</button></div></article>`;
+  } else {
+    s += `<div class="nchips">${names.map(n => `<button class="chipc ${n === name ? 'on' : ''}" data-act="aclsel" data-id="${d.id}" data-n="${esc(n)}">${esc(n)} <small>${isStd(n) ? 'standard' : 'étendue'}</small></button>`).join('')}${names.some(isStd) ? '' : `<button class="link" data-act="aclnewstd" data-id="${d.id}">+ ACL standard 10</button>`}${names.some(n => !isStd(n)) ? '' : `<button class="link" data-act="aclnew" data-id="${d.id}">+ ACL étendue EDGE-IN</button>`}</div>`;
+    const L = A.lists[name];
+    s += `<div class="tscroll"><table class="ptable acl"><thead><tr><th>N°</th><th>Action</th>${std ? '<th>Source</th>' : '<th>Proto</th><th>Source</th><th>Destination</th><th>Port</th>'}<th></th></tr></thead><tbody>`;
+    L.forEach((e, i) => {
+      s += `<tr><td>${e.seq}</td><td><b class="${e.act}">${e.act}</b></td>${std ? `<td class="mono">${esc(e.src)}</td>` : `<td>${e.proto}</td><td class="mono">${esc(e.src)}</td><td class="mono">${esc(e.dst)}</td><td>${e.port ? portsOf(e).join(' ') : '—'}</td>`}`
+        + `<td class="acts"><button class="link" data-act="aclmv" data-id="${d.id}" data-seq="${e.seq}" data-dir="-1" ${i ? '' : 'disabled'} title="Monter la ligne" aria-label="Monter la ligne ${e.seq}">↑</button>`
+        + `<button class="link" data-act="aclmv" data-id="${d.id}" data-seq="${e.seq}" data-dir="1" ${i < L.length - 1 ? '' : 'disabled'} title="Descendre la ligne" aria-label="Descendre la ligne ${e.seq}">↓</button>`
+        + `<button class="link" data-act="acldel" data-id="${d.id}" data-seq="${e.seq}" title="Supprimer la ligne" aria-label="Supprimer la ligne ${e.seq}">✕</button></td></tr>`;
+    });
+    s += `<tr class="impl"><td>—</td><td><b class="deny">deny</b></td>${std ? '<td>any</td>' : '<td>ip</td><td>any</td><td>any</td><td>—</td>'}<td class="muted">implicite</td></tr></tbody></table></div>`;
+    const x = w.aclDraft || (w.aclDraft = std ? { act: 'permit', proto: 'ip', src: '10.99.0.0 0.0.0.255', dst: 'any', port: '' } : { act: 'permit', proto: 'tcp', src: 'any', dst: 'host 203.0.113.10', port: '443' });
+    const dl = 'acladdr-' + w.id;
+    s += `<div class="aclform"><label class="fld">Action <select class="a-f" data-k="act">${[['permit', 'permit (autoriser)'], ['deny', 'deny (refuser)']].map(o => `<option value="${o[0]}" ${x.act === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select></label>`
+      + (std ? '' : `<label class="fld">Protocole <select class="a-f" data-k="proto">${['ip', 'tcp', 'udp', 'icmp'].map(o => `<option ${x.proto === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>`)
+      + `<label class="fld">Source <input class="a-f" data-k="src" list="${dl}" value="${esc(x.src)}" autocomplete="off"></label>`
+      + (std ? '' : `<label class="fld">Destination <input class="a-f" data-k="dst" list="${dl}" value="${esc(x.dst)}" autocomplete="off"></label><label class="fld">Port(s) <input class="a-f" data-k="port" value="${esc(x.port)}" placeholder="vide = tous · 443 22 25" autocomplete="off"></label>`) + `</div>`
+      + `<datalist id="${dl}">${ACL_ADDR.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</datalist>`
+      + `<p class="mono muted aclprev">${esc((/^\d+$/.test(name) ? `access-list ${name} ` : '') + aclDraftText(x, std))}</p><button class="btn primary" data-act="acladd" data-id="${d.id}">Ajouter la ligne à la fin</button>`
+      + `<p class="note">Une ligne ajoutée va en bas de la liste. Monte-la avec ↑ si elle doit passer avant une autre.</p></article>`;
+    if (std) s += aclTester(d, L, true);
+    else {
+      s += `<article class="card"><h4>Appliquer l'ACL ${esc(name)}</h4><p class="muted">Une ACL ne filtre rien tant qu'elle n'est pas posée sur une interface.</p>`;
+      for (const p of CAT[d.type].ports.filter(q => q.role === 'wan')) {
+        const op = wanOp(d, p.id);
+        s += `<label class="chk"><input type="checkbox" data-act="aclapply" data-id="${d.id}" data-p="${p.id}" ${A.in[p.id] === name ? 'checked' : ''}> En entrée sur <b>${p.id}</b> ${op ? `(opérateur ${op})` : '(non câblé)'}${A.in[p.id] && A.in[p.id] !== name ? ` · porte déjà ${esc(A.in[p.id])}` : ''}</label>`;
+      }
+      s += `</article>` + aclTester(d, L, false);
+    }
+  }
+  // lignes d'accès à distance
+  const v = vtyOf(d), stds = names.filter(isStd);
+  s += `<article class="card"><h4>🔐 Accès à distance (lignes VTY)</h4><p class="muted">Les administrateurs ouvrent une session sur le routeur par les lignes VTY 0 à 4. Telnet circule en clair : on n'accepte que SSH, et seulement depuis le réseau ADMIN (10.99.0.0/24) grâce à une ACL standard.</p>`
+    + `<label class="fld">Protocoles acceptés (transport input) <select data-act="vty" data-id="${d.id}" data-f="transport">${[['all', 'telnet et ssh (déconseillé)'], ['ssh', 'ssh seulement (chiffré)'], ['telnet', 'telnet seulement (en clair)']].map(o => `<option value="${o[0]}" ${v.transport === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select></label>`
+    + `<label class="fld">ACL des lignes (access-class … in) <select data-act="vty" data-id="${d.id}" data-f="acl"><option value="">aucune : tout le monde peut tenter</option>${stds.map(n => `<option value="${n}" ${v.acl === n ? 'selected' : ''}>ACL standard ${n}</option>`).join('')}</select></label>`
+    + (stds.length ? '' : `<p class="note">Il faut d'abord une ACL standard (1 à 99). <button class="link" data-act="aclnewstd" data-id="${d.id}">Créer l'ACL standard 10</button></p>`) + `</article>`;
+  s += `<article class="card"><h4>Interfaces</h4><table class="ptable"><thead><tr><th>Port</th><th>Rôle</th><th>Relié à</th><th>ACL en entrée</th></tr></thead><tbody>${CAT[d.type].ports.map(p => { const cb = portCable(d.id, p.id), peer = cb ? otherEnd(cb, d.id, p.id) : null; return `<tr><td><b>${esc(p.id)}</b></td><td>${p.role || ''}</td><td>${peer ? esc(nameOf(dev(peer.d)) + ' ' + peer.p) : '<span class="muted">—</span>'}</td><td>${A.in[p.id] ? esc(A.in[p.id]) : '<span class="muted">—</span>'}</td></tr>`; }).join('')}</tbody></table></article>`;
+  return s;
+}
+// Paquets types passés dans l'ACL : qui décide, et est-ce le bon choix ?
+function aclTester(d, L, std) {
+  const P = std ? vtyPkts() : aclPkts(wanOp(d, 'Te0/0/0') || 1);
+  const bad = P.filter(k => aclEval(L, k).act !== k.want).length;
+  let s = `<article class="card"><h4>🧪 Tester des paquets</h4><p class="muted">${std ? "Qui essaie d'ouvrir une session sur le routeur ? Une ACL standard ne regarde que la source." : "Paquets types qui arrivent d'Internet."} Pour chacun : la ligne qui décide, et ce qu'il faudrait. ${bad ? `<b>${bad} à corriger.</b>` : '<b>Tout est bon.</b>'}</p><ul class="plist pkts">`;
+  for (const k of P) {
+    const r = aclEval(L, k), good = r.act === k.want;
+    s += `<li>${stDot(good ? 'ok' : 'bad')} <span><b>${esc(k.name)}</b><small class="mono">${std ? `source ${k.src}` : `${k.proto.toUpperCase()} ${k.src} → ${k.dst} port ${k.port}`}</small><small>${r.act === 'permit' ? 'Autorisé' : 'Refusé'} ${r.i < 0 ? 'par le deny implicite' : `par la ligne ${r.e.seq}`}${good ? ' ✓' : ` · il faudrait ${k.want === 'permit' ? "l'autoriser" : 'le refuser'}`}</small></span></li>`;
+  }
+  return s + `</ul></article>`;
+}
+function goRouter(tab, draft, acl) {
+  const r = devsOfKind('router')[0]; if (!r) return;
+  openWin({ d: r.id });
+  const w = WINS.find(x => x.key === 'd:' + r.id);
+  if (w && acl) w.aclDraft = acl;
+  setWinTab(r.id, tab, draft);
+}
+// Ouvre la CLI du routeur avec la commande qui convient au mode où il se trouve
+function goRtrCli(byMode) {
+  const r = devsOfKind('router')[0]; if (!r) return;
+  const m = cliState(r).mode;
+  goRouter('cli', byMode[m] || (m === 'exec' ? 'conf t' : 'exit'));
+}
+
+/* ----- Onglet CLI : terminal de l'équipement ----- */
+function winCli(w, d) {
+  const key = 'd:' + d.id, hist = CONS.hist[key] || [`Connecté à ${d.host}. Tape « ? » pour l'aide, ou clique une commande en bas.`];
+  const intro = kindOf(d) === 'router'
+    ? `<p class="infobox">Ici on tape les vraies commandes Cisco IOS. Les commandes <code>show</code> vérifient l'état sans rien changer : <code>show ip interface brief</code> pour les interfaces, <code>show bgp summary</code> pour les sessions avec les opérateurs.</p>`
+    : isIOS(d)
+    ? `<p class="infobox">Ici on tape les vraies commandes Cisco IOS. Pour régler un port : <code>conf t</code> → <code>interface Gi1/0/1</code> → <code>switchport access vlan 10</code> → <code>end</code>. Les abréviations marchent (<code>sh vl br</code>).</p>`
+    : `<p class="infobox">Terminal ${kindOf(d) === 'fw' ? 'Linux du pare-feu' : 'Linux'} : commandes de diagnostic. Clique une commande pour la préparer, puis Entrée.</p>`;
+  return intro + `<div class="wterm"><pre class="wout">${esc(hist.join('\n'))}</pre>
+<div class="wchips">${cliChips(d).map(x => `<button class="chip" data-act="wchip" data-cmd="${esc(x.c)}" title="${esc(x.h || '')}">${esc(x.c)}</button>`).join('')}</div>
+<form class="wcli" autocomplete="off"><span class="wprompt">${esc(cliPrompt(d))}</span><input value="${esc(w.draft || '')}" aria-label="Commande" placeholder="tape une commande, ou ?" spellcheck="false"></form></div>`;
+}
+function winCliRun(w, cmd) {
+  const d = dev(w.spec.d), key = 'd:' + d.id, before = cliPrompt(d);
+  const res = cliRun(d, cmd);
+  CONS.hist[key] = (CONS.hist[key] || []).concat([`${before} ${cmd}`].concat(res ? [res] : [])).slice(-400);
+  cmdDetect({ d: d.id }, cmd);
+  w.draft = '';
+  derive(); renderAll(); renderWins(true);
+  const el = document.getElementById(w.id); if (el) { const i = el.querySelector('.wcli input'); if (i) i.focus(); }
+}
+
+/* ----- Onglet Aide : mode d'emploi et fiches de cours liées ----- */
+function winAide(w) {
+  const k = winKind(w);
+  const ids = w.spec.d ? (KIND_FICHES[k] || ['baie']) : w.spec.infra ? (INFRA_FICHES[w.spec.infra] || ['onduleur']) : ['froid', 'salle'];
+  const f = FICHE(ids[Math.min(w.fiche, ids.length - 1)]) || FICHES[0];
+  let s = '';
+  if (KIND_GUIDE[k]) s += `<article class="card guide"><h4>🧭 Comment s'en servir</h4><ol class="steps">${KIND_GUIDE[k].map(t => `<li><span>${esc(t)}</span></li>`).join('')}</ol></article>`;
+  s += `<div class="chips">${ids.map((id, i) => `<button class="chipc ${FICHE(id) === f ? 'on' : ''}" data-act="wfiche" data-i="${i}">📘 ${esc(FICHE(id).title)}</button>`).join('')}</div>`;
+  s += `<article class="card fbody"><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p><button class="btn primary" data-act="fiche" data-id="${f.id}">Ouvrir la fiche complète et son quiz</button></article>`;
+  return s;
+}
+
 function renderWins(force) {
   const box = $('#windows');
   for (const w of [...WINS]) if (w.spec.d && !dev(w.spec.d)) { clearLive(w.id); WINS.splice(WINS.indexOf(w), 1); }
@@ -899,17 +1269,18 @@ function renderWins(force) {
     if (!el) {
       el = document.createElement('section');
       el.className = 'win'; el.id = w.id; el.setAttribute('role', 'dialog');
-      el.innerHTML = `<header><div class="wt"><b></b><span class="muted"></span></div>${w.spec.d ? '<button class="btn small" data-wcons>Console</button>' : ''}<button class="x" aria-label="Fermer la fenêtre">×</button></header><div class="wbody" data-win="${w.id}"></div>`;
+      el.innerHTML = `<header><div class="wt"><b></b><span class="muted"></span></div><button class="x" aria-label="Fermer la fenêtre">×</button></header><nav class="wtabs" role="tablist"></nav><div class="wbody" data-win="${w.id}"></div>`;
       el.querySelector('.x').addEventListener('click', () => closeWin(w.id));
-      const cb = el.querySelector('[data-wcons]'); if (cb) cb.addEventListener('click', () => openConsole({ d: w.spec.d }));
       el.addEventListener('pointerdown', () => { if (w.z !== winZ) { w.z = ++winZ; el.style.zIndex = w.z; } });
       dragWin(el, w);
       box.appendChild(el);
     }
     el.style.left = w.x + 'px'; el.style.top = w.y + 'px'; el.style.zIndex = w.z;
+    if (w.spec.d) el.style.setProperty('--wc', kindCol(dev(w.spec.d)));
     const [t, sub] = winTitle(w);
     el.querySelector('.wt b').textContent = t; el.querySelector('.wt .muted').textContent = sub;
-    el.setAttribute('aria-label', 'Configuration de ' + t);
+    el.setAttribute('aria-label', 'Équipement ' + t);
+    el.querySelector('.wtabs').innerHTML = winTabsOf(w).map(([id, label]) => `<button role="tab" data-wtab="${id}" aria-selected="${w.tab === id}">${label}</button>`).join('');
     const body = el.querySelector('.wbody');
     if (!force && body.contains(ae) && /INPUT|SELECT|TEXTAREA/.test(ae.tagName)) continue;
     const sc = body.scrollTop;
@@ -917,8 +1288,23 @@ function renderWins(force) {
     body.innerHTML = winBody(w);
     LIVEP = 's';
     body.scrollTop = sc;
+    const out = body.querySelector('.wout'); if (out) out.scrollTop = out.scrollHeight;
   }
 }
+$('#windows').addEventListener('click', e => {
+  const tb = e.target.closest('[data-wtab]'); if (!tb) return;
+  const w = WINS.find(x => x.id === tb.closest('.win').id); if (!w) return;
+  w.tab = tb.dataset.wtab;
+  if (w.tab === 'phys' && w.view.t !== 'dev' && w.view.t !== 'vm') w.view = { t: 'dev', d: w.spec.d };
+  renderWins(true);
+  if (w.tab === 'cli') { const i = document.querySelector(`#${w.id} .wcli input`); if (i) i.focus(); }
+});
+$('#windows').addEventListener('submit', e => {
+  const f = e.target.closest('.wcli'); if (!f) return;
+  e.preventDefault();
+  const w = WINS.find(x => x.id === f.closest('.win').id), v = f.querySelector('input').value;
+  if (w && v.trim()) winCliRun(w, v);
+});
 function dragWin(el, w) {
   const h = el.querySelector('header');
   let st = null;
@@ -994,16 +1380,35 @@ function panelClick(e) {
   const wb = b.closest('.wbody');
   if (wb) {
     const w = WINS.find(x => x.id === wb.dataset.win);
+    if (w && a === 'cfgport') { w.tab = 'cfg'; w.cfgPort = b.dataset.p; renderWins(true); return; }
+    if (w && a === 'wfiche') { w.fiche = +b.dataset.i; renderWins(true); return; }
+    if (w && a === 'wchip') { w.draft = b.dataset.cmd; renderWins(true); const i = document.querySelector(`#${w.id} .wcli input`); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } return; }
+    if (w && a === 'aclsel') { w.acl = b.dataset.n; w.aclDraft = null; renderWins(true); return; }
+    if (w && a === 'aclnewstd') { const A = aclOf(dev(id)); if (!A.lists['10']) A.lists['10'] = []; w.acl = '10'; w.aclDraft = null; touch(); derive(); renderAll(); renderWins(true); return; }
+    if (w && a === 'aclnew') { const d = dev(id), A = aclOf(d); if (!A.lists['EDGE-IN']) { A.lists['EDGE-IN'] = []; cli(d, ['ip access-list extended EDGE-IN']); touch(); } w.acl = 'EDGE-IN'; w.aclDraft = null; derive(); renderAll(); renderWins(true); return; }
+    if (w && a === 'aclmv') { act(() => actAclMove(dev(id), w.acl, +b.dataset.seq, +b.dataset.dir)); renderWins(true); return; }
+    if (w && a === 'acldel') { act(() => actAclDel(dev(id), w.acl, +b.dataset.seq)); renderWins(true); return; }
+    if (w && a === 'acladd') {
+      const std = isStd(w.acl), e = aclParse(aclDraftText(w.aclDraft, std), std);
+      if (typeof e === 'string') { toast(e.replace(/^% /, ''), 'bad'); return; }
+      const r = act(() => actAclAdd(dev(id), w.acl, e));
+      if (typeof r !== 'string') toast(`Ligne ${r.seq} ajoutée : ${std ? r.act + ' ' + r.src : aclLine(r)}`, 'good');
+      renderWins(true); return;
+    }
     const nav = { selvm: () => ({ t: 'vm', id }), seldev: () => ({ t: 'dev', d: id }), selport: () => ({ t: 'port', d: id, p: b.dataset.p }), selcable: () => ({ t: 'cable', c: id }), seldisk: () => ({ t: 'disk', d: id, bay: +b.dataset.bay }) }[a];
     if (w && nav) {
       const v = nav();
       if (v.d && w.spec.d && v.d !== w.spec.d) openWin({ d: v.d, p: v.p });
-      else { w.view = v; renderWins(true); }
+      else { w.view = v; w.tab = 'phys'; renderWins(true); }
       return;
     }
   }
+  if (a === 'cfgport') { openWin({ d: id, p: b.dataset.p }); return; }
   switch (a) {
-    case 'accept': actAccept(id); derive(); renderAll(); break;
+    case 'accept': { actAccept(id); UI.tab = 'contracts'; derive(); renderAll(); const cs = S.contracts.find(c => c.id === id); if (cs && cs.state === 'setup') openBriefing(cs); break; }
+    case 'gstep': { const cs = S.contracts.find(c => c.id === id), st = cs && guideSteps(cs)[+b.dataset.i]; if (st && st.go) st.go(); renderAll(); break; }
+    case 'mission': { const cs = S.contracts.find(c => c.id === id); derive(); if (cs && cs.state === 'setup' && D.ct[id] && D.ct[id].st === 'ok') { activateContract(cs); derive(); renderAll(); } break; }
+    case 'ctopen': UI.ctOpen[id] = !UI.ctOpen[id]; renderSide(); break;
     case 'deploy': openDeploy(id, b.dataset.svc); break;
     case 'selvm': select({ t: 'vm', id }); break;
     case 'seldev': select({ t: 'dev', d: id }); break;
@@ -1011,7 +1416,6 @@ function panelClick(e) {
     case 'selcable': select({ t: 'cable', c: id }); break;
     case 'seldisk': UI.face = 'front'; select({ t: 'disk', d: id, bay: +b.dataset.bay }); break;
     case 'prefill': { const f = JSON.parse(b.dataset.f); UI.ruleDraft = { src: f[0], dst: f[1], proto: f[2], port: String(f[3]) }; UI.tab = 'network'; renderAll(); break; }
-    case 'tuto': tutoSteps()[+b.dataset.i].go(); renderAll(); break;
     case 'console': openConsole({ d: id }); break;
     case 'vmcons': openConsole({ vm: id }); break;
     case 'move': UI.place = { type: dev(id).type, move: id }; renderAll(); break;
@@ -1053,8 +1457,8 @@ function panelClick(e) {
     case 'report': openReport(S.tickets.find(x => x.id === +id)); break;
     case 'runcmd': openConsole(b.dataset.vm ? { vm: b.dataset.vm } : { d: b.dataset.dev }, b.dataset.cmd); break;
     case 'addrule': {
-      const port = $('#rPort').value.trim().toLowerCase();
-      const r = { src: $('#rSrc').value, dst: $('#rDst').value, proto: $('#rProto').value, port: port === 'any' || port === '' ? 'any' : +port };
+      const f = ruleRead(b.closest('.rulecard')), port = f.port;
+      const r = { src: f.src, dst: f.dst, proto: f.proto, port: port === 'any' || port === '' ? 'any' : +port };
       if (r.port !== 'any' && !(r.port >= 1 && r.port <= 65535)) { toast('Port invalide : un nombre de 1 à 65535, ou « any ».', 'bad'); break; }
       UI.ruleDraft = { src: r.src, dst: r.dst, proto: r.proto, port: String(r.port) };
       const res = act(() => actAddRule(r)); if (!res) { const risk = ruleRisk(r); toast(risk ? 'Règle ajoutée, mais : ' + risk : 'Règle ajoutée.', risk ? 'bad' : 'good'); }
@@ -1084,7 +1488,8 @@ $('#sidebody').addEventListener('click', panelClick);
 $('#windows').addEventListener('click', panelClick);
 function panelChange(e) {
   const b = e.target.closest('[data-act]');
-  if (!b && ['rSrc', 'rDst', 'rProto'].includes(e.target.id)) { UI.ruleDraft = { src: $('#rSrc').value, dst: $('#rDst').value, proto: $('#rProto').value, port: $('#rPort').value }; const p = UI.ruleDraft.port; $('#nftprev').textContent = nftLine({ ...UI.ruleDraft, port: p === 'any' ? 'any' : +p || p }); return; }
+  if (!b && e.target.closest('.rulecard')) { rulePreview(e.target.closest('.rulecard')); return; }
+  if (!b && e.target.matches('.a-f')) { aclDraftSet(e.target); return; }
   if (!b) return;
   const a = b.dataset.act, d = b.dataset.id ? dev(b.dataset.id) : null;
   const done = () => { b.blur(); derive(); renderAll(); };
@@ -1103,13 +1508,24 @@ function panelChange(e) {
   else if (a === 'cableto') { if (!b.value) return; const [dd, pp] = b.value.split('|'); b.blur(); openCableModal({ d: d.id, p: b.dataset.p }, { d: dd, p: pp }); }
   else if (a === 'vmtog') { actVm(b.dataset.id, b.dataset.op); done(); }
   else if (a === 'syn') { actFw('syn'); done(); }
+  else if (a === 'vty') { const f = b.dataset.f, r = actVty(d, { [f]: f === 'acl' ? (b.value || null) : b.value }); if (r) toast(r, 'bad'); done(); renderWins(true); }
+  else if (a === 'aclapply') { const w = WINS.find(x => x.id === b.closest('.win').id); if (w) { actAclApply(d, b.dataset.p, b.checked ? w.acl : null); done(); renderWins(true); } }
 }
 $('#sidebody').addEventListener('change', panelChange);
 $('#windows').addEventListener('change', panelChange);
 $('#windows').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('tr[data-act]')) e.target.click(); });
-$('#sidebody').addEventListener('input', e => {
-  if (e.target.id === 'rPort') { const p = e.target.value; UI.ruleDraft.port = p; $('#nftprev').textContent = nftLine({ src: $('#rSrc').value, dst: $('#rDst').value, proto: $('#rProto').value, port: p === 'any' ? 'any' : +p || p }); }
-});
+function aclDraftSet(el) {
+  const w = WINS.find(x => x.id === el.closest('.win').id); if (!w || !w.aclDraft) return;
+  w.aclDraft[el.dataset.k] = el.value;
+  const p = el.closest('.aclcard').querySelector('.aclprev'); if (p) p.textContent = (/^\d+$/.test(w.acl) ? `access-list ${w.acl} ` : '') + aclDraftText(w.aclDraft, isStd(w.acl));
+}
+function panelInput(e) {
+  if (e.target.matches('.a-f')) aclDraftSet(e.target);
+  if (e.target.matches('.r-port')) rulePreview(e.target.closest('.rulecard'));
+  if (e.target.matches('.wcli input')) { const w = WINS.find(x => x.id === e.target.closest('.win').id); if (w) w.draft = e.target.value; }
+}
+$('#sidebody').addEventListener('input', panelInput);
+$('#windows').addEventListener('input', panelInput);
 $('#sidebody').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('tr[data-act]')) e.target.click(); });
 document.querySelectorAll('#tabs [role=tab]').forEach(t => t.addEventListener('click', () => { UI.tab = t.dataset.tab; renderSide(); }));
 document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => { S.speed = +b.dataset.speed; renderTop(); }));
@@ -1144,10 +1560,10 @@ window.addEventListener('keydown', e => {
 
 /* ---------- Rendu global, sauvegarde, boucle ---------- */
 function renderAll() { renderView(svg); renderTop(); renderSide(); renderWins(); if (!$('#console').hidden) renderConsole(); }
-const SAVE_KEY = 'hyperscale-dc-v3';
+const SAVE_KEY = 'hyperscale-dc-v4';
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { } }
 function load(o) {
-  if (!o || o.v !== 3 || !o.devs || !o.power) return false;
+  if (!o || o.v !== 4 || !o.devs || !o.power) return false;
   S = o;
   S.cli = S.cli || []; S.timers = S.timers || {}; S.flags = S.flags || {}; S.teach = S.teach || [];
   return true;
