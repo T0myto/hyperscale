@@ -784,7 +784,12 @@ function openFiches(id) {
   const f0 = FICHE(id) || FICHES[0];
   const render = f => {
     const notes = coursOf(f.id);
-    let s = `<div class="fiches"><nav class="flist">${FICHES.map(x => `<button data-f="${x.id}" class="${x.id === f.id ? 'on' : ''}"><i class="lv lv${ficheRank(x.id)[0]}" title="${NIV_NAME[ficheRank(x.id)[0]]}"></i>${esc(x.title)}${S.codex.seen[x.id] ? '' : ' <i class="new" title="Pas encore ouverte">•</i>'}</button>`).join('')}<p class="lvkey"><i class="lv lv1"></i>facile <i class="lv lv2"></i>intermédiaire <i class="lv lv3"></i>difficile</p></nav>`;
+    // menu : légende des couleurs en haut, puis les fiches groupées par niveau (liste déroulante sur petit écran)
+    const item = x => `<button data-f="${x.id}" class="${x.id === f.id ? 'on' : ''}"><span class="fn">${FICHES.indexOf(x) + 1}</span><span class="ft">${esc(x.title)}</span>${S.codex.seen[x.id] ? '' : '<i class="new" title="Pas encore ouverte">•</i>'}<span class="fp" title="${PRIO_NAME[ficheRank(x.id)[1]]}">${'★'.repeat(4 - ficheRank(x.id)[1])}</span></button>`;
+    const groups = [1, 2, 3].map(n => [n, FICHES.filter(x => ficheRank(x.id)[0] === n)]).filter(g => g[1].length);
+    let s = `<div class="fiches"><aside class="fside"><p class="lvkey"><span><i class="lv lv1"></i>Facile</span><span><i class="lv lv2"></i>Intermédiaire</span><span><i class="lv lv3"></i>Difficile</span><span class="fpk">★★★ indispensable · ★ pour approfondir</span></p>`;
+    s += `<select class="fsel" aria-label="Choisir une fiche">${groups.map(([n, l]) => `<optgroup label="${NIV_NAME[n]}">${l.map(x => `<option value="${x.id}" ${x.id === f.id ? 'selected' : ''}>${FICHES.indexOf(x) + 1}. ${esc(x.title)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+    s += `<nav class="flist">${groups.map(([n, l]) => `<div class="fgrp lv${n}"><h5><i class="lv lv${n}"></i>${NIV_NAME[n]} <small>${l.length} fiches</small></h5>${l.map(item).join('')}</div>`).join('')}</nav></aside>`;
     s += `<section class="fbody"><div class="eyebrow">Fiche du jeu · <span class="tag lv${ficheRank(f.id)[0]}">${NIV_NAME[ficheRank(f.id)[0]]}</span> <span class="tag">${'★'.repeat(4 - ficheRank(f.id)[1])} ${PRIO_NAME[ficheRank(f.id)[1]]}</span></div><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p>`;
     if (notes.length) {
       s += `<nav class="ctoc"><b>📗 Note${notes.length > 1 ? 's' : ''} de cours complète${notes.length > 1 ? 's' : ''} :</b> ${notes.map((n, i) => `<a href="#cours-${i}" data-goto="${i}">${esc(n.title)}</a>`).join(' · ')}</nav>`;
@@ -797,9 +802,11 @@ function openFiches(id) {
       S.codex.seen[f.id] = true;
       const body = m.querySelector('.mbody');
       body.innerHTML = render(f);
-      body.scrollTop = 0; const fb = body.querySelector('.fbody'); if (fb) fb.scrollTop = 0;
+      body.classList.add('fm');
+      const on = body.querySelector('.flist button.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+      const sel = body.querySelector('.fsel'); if (sel) sel.addEventListener('change', () => show(FICHE(sel.value)));
       body.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => show(FICHE(b.dataset.f))));
-      body.querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = body.querySelector('#cours-' + a.dataset.goto); if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' }); }));
+      body.querySelectorAll('[data-goto]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = body.querySelector('#cours-' + a.dataset.goto), fb = body.querySelector('.fbody'); if (t && fb) fb.scrollTo({ top: t.offsetTop - fb.offsetTop, behavior: 'smooth' }); }));
       mdDiagrams(body);
     };
     show(f0);
