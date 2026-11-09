@@ -11,14 +11,14 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 
 ## Progression
 
-17 contrats en 4 chapitres. Une **mission** se valide dès que ses objectifs sont atteints ; un **contrat client** se livre par une recette (tests d'acceptation).
+18 contrats en 4 chapitres. Les notions arrivent **par facilité, puis par priorité** : d'abord le plus facile, et à difficulté égale le plus important pour le BTS SIO SISR. L'urbanisation de la salle est la première notion. Une **mission** se valide dès que ses objectifs sont atteints ; un **contrat client** se livre par une recette (tests d'acceptation).
 
-| Chapitre | Contrats | Notions |
+| Chapitre | Contrats | Notions, dans l'ordre |
 |---|---|---|
-| 1 · Les bases | Ta première baie, Le réseau local, Cabinet Marchand | baie, alimentation A/B, câble cuivre, switch et VLAN, virtualisation, adressage IP, RAID |
-| 2 · Ouvrir sur Internet | Raccorder la salle, Le Fournil, Mairie de Saint-Aubin, Immo Laurent | fibre et modules, pare-feu et DMZ, trunk 802.1Q, ports TCP/UDP, TLS, routage entre VLAN |
-| 3 · Exploiter la salle | Supervision, Sauvegardes 3-2-1, Sécuriser les ports du switch, Nordik Shop | SNMP et Syslog, sauvegardes, BPDU Guard et VLAN natif, haute disponibilité, refroidissement |
-| 4 · Notions avancées | Studio Pixel, Protéger l'accès au routeur, Filtrer en bordure, Agences Plus, Campus Numérique, Hébergeur régional | attaques, ACL standard et lignes VTY, ACL étendue, Active Directory, Kubernetes, double opérateur |
+| 1 · Les bases (facile) | Ta première baie, Le réseau local, Cabinet Marchand, Énergie secourue et froid | salle, baie, alimentation A/B, câble cuivre, switch et VLAN, adressage IP, virtualisation, RAID, onduleurs, refroidissement |
+| 2 · Ouvrir sur Internet | Raccorder la salle, Le Fournil, Mairie de Saint-Aubin, Immo Laurent | fibre, ports TCP/UDP, pare-feu et DMZ, méthode de dépannage, certificats TLS |
+| 3 · Exploiter et protéger (intermédiaire) | Sauvegardes 3-2-1, Supervision, Sécuriser les ports du switch, Studio Pixel | sauvegardes, supervision, sécurité de niveau 2, attaques |
+| 4 · Notions avancées (difficile) | Protéger l'accès au routeur, Filtrer en bordure, Agences Plus, Nordik Shop, Campus Numérique, Hébergeur régional | ACL standard puis étendue, Active Directory, redondance et spine-leaf, Kubernetes |
 
 - **Guide pas à pas** : chaque étape a un bouton « Montrer » qui amène au bon endroit, et un lien « Pourquoi ? » vers la fiche de cours.
 - **Avant et après chaque contrat** : les notions à apprendre, puis ce qu'il faut retenir, avec un lien vers chaque fiche.
@@ -35,7 +35,7 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
   - **Aide** : mode d'emploi et fiches liées.
 - **Console** avec des sorties réalistes (Cisco IOS, Linux, Proxmox, nftables) et la commande équivalente de chaque action.
 - **Incidents** (pannes matérielles, coupures, attaques) détectés par la supervision, le client ou l'IDS, avec une méthode de dépannage par couches OSI.
-- **24 fiches de cours**, dans l'ordre du parcours : le résumé du jeu, puis la note de cours complète du vault cours-sisr-main (tableaux, encadrés, schémas Mermaid, images). Les 4 sujets propres au datacenter (baie, froid, salle, onduleurs) n'ont pas de note de cours : la fiche du jeu en tient lieu.
+- **24 fiches de cours**, classées par facilité puis par priorité (pastille de niveau et étoiles sur chaque fiche) : le résumé du jeu, puis la note de cours complète du vault cours-sisr-main (tableaux, encadrés, schémas Mermaid, images). Les 4 sujets propres au datacenter (baie, froid, salle, onduleurs) n'ont pas de note de cours : la fiche du jeu en tient lieu.
 - Pas de factures : seuls les contrats en service rapportent de l'argent.
 
 ## Structure

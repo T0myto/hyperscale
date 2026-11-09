@@ -278,7 +278,8 @@ function renderView(svg) {
   let s = DEFS;
   s += `<rect x="-20" y="-62" width="${RW + 380}" height="22" rx="3" rx="5" fill="url(#mesh)" stroke="#9fb0c2" stroke-width="1"/><text x="-14" y="-66" class="tray">Chemin de câbles en hauteur, vers les autres baies</text>`;
   s += rackSVG(R);
-  const devs = devsIn(R);
+  // pendant un placement, les obturateurs sont masqués : on voit où le matériel peut prendre leur place
+  const devs = devsIn(R).filter(d => !(UI.place && UI.place.type !== 'blank' && kindOf(d) === 'blank'));
   // placement
   if (UI.place && S.racks[R].kind === 'rack') {
     const type = UI.place.type, h = CAT[type].u;

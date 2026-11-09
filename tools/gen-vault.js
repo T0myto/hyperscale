@@ -5,10 +5,10 @@ const [GAME, VAULT] = process.argv.slice(2);
 global.localStorage = { getItem() { return null; }, setItem() {} };
 const src = ['data', 'sim', 'actions', 'learn', 'console', 'cours'].map(f => fs.readFileSync(path.join(GAME, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
 const API = new Function(src + `
-return { COURS, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, IF_CMDS, CONF_CMDS, RIF_CMDS, LINE_CMDS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
+return { COURS, FICHE_RANK, NIV_NAME, PRIO_NAME, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, IF_CMDS, CONF_CMDS, RIF_CMDS, LINE_CMDS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
   newState, actAccept, actPlace, actPlug, actConnect, actPortCfg, actDeploy, actAddRule, actAddDisk, actSetRaid, actInstallRack, derive, devsOfKind, cmdList,
   get S(){ return S; }, freeIp };`)();
-const { COURS, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES } = API;
+const { COURS, FICHE_RANK, NIV_NAME, PRIO_NAME, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES } = API;
 
 /* ---------- utilitaires ---------- */
 // Garde la progression déjà cochée dans les notes existantes (revise, maitrise).
@@ -51,8 +51,8 @@ API.newState();
 const S = API.S;
 S.money = 1e6;
 S.unlocked.push('nas', 'ram', 'hdd');
-S.contracts.push({ id: 'c5', state: 'offer' }, { id: 'c7', state: 'offer' });
-API.actAccept('c5'); API.actAccept('c7');
+S.contracts.push({ id: 'c6', state: 'offer' }, { id: 'c8', state: 'offer' });
+API.actAccept('c6'); API.actAccept('c8');
 const R1 = API.actInstallRack('A', 1);
 const rtr = API.actPlace('router', R1, 40), fw = API.actPlace('fw', R1, 38);
 const sw = API.actPlace('sw24', R1, 36), srv = API.actPlace('srv1', R1, 34), srv2 = API.actPlace('srv1', R1, 32), nas = API.actPlace('nas', R1, 28);
@@ -72,9 +72,9 @@ API.actPortCfg(sw, 'Gi1/0/1', { mode: 'trunk', allowed: [10, 20, 30, 99], native
 API.actPortCfg(sw, 'Gi1/0/2', { mode: 'trunk', allowed: [10, 20, 30, 99], native: 999 });
 API.actPortCfg(sw, 'Te1/1/2', { vlan: 30 });
 API.derive();
-const web = API.actDeploy('c5', 'web', srv.id, 10, API.freeIp(10), srv.id);
-API.actDeploy('c7', 'web', srv2.id, 10, API.freeIp(10), srv2.id);
-API.actDeploy('c7', 'db', srv.id, 20, API.freeIp(20), srv.id);
+const web = API.actDeploy('c6', 'web', srv.id, 10, API.freeIp(10), srv.id);
+API.actDeploy('c8', 'web', srv2.id, 10, API.freeIp(10), srv2.id);
+API.actDeploy('c8', 'db', srv.id, 20, API.freeIp(20), srv.id);
 for (const r of [['Internet', 'DMZ', 'tcp', 443], ['DMZ', 'SERVEURS', 'tcp', 5432], ['Internet', 'DMZ', 'tcp', 22]]) API.actAddRule({ src: r[0], dst: r[1], proto: r[2], port: r[3] });
 API.derive();
 S.contracts.forEach(c => { if (c.state === 'setup') c.state = 'active'; });
@@ -108,6 +108,8 @@ for (const f of FICHES) {
   write(`Fiches/${ficheFile(f)}.md`, withProg(f.id, `---
 tags: [jeu-sisr, fiche]
 fiche: ${f.id}
+niveau: ${NIV_NAME[FICHE_RANK[f.id][0]]}
+priorite: ${PRIO_NAME[FICHE_RANK[f.id][1]]}
 revise: false
 ---
 
@@ -116,7 +118,7 @@ revise: false
 ← ${ACCUEIL} · Toutes les fiches : [[Fiches/00 - Sommaire des fiches|Sommaire]]
 
 > [!info] Contenu
-> ${notes.length ? `Le résumé du jeu Hyperscale, puis ta note de cours complète (vault **cours-sisr-main**) : ${notes.map(n => `*${n.name}*`).join(', ')}.` : "Le résumé du jeu Hyperscale. Ton cours (vault **cours-sisr-main**) n'a pas de note sur ce sujet, propre au datacenter : cette fiche en tient lieu."}
+> **${NIV_NAME[FICHE_RANK[f.id][0]]}** · ${'★'.repeat(4 - FICHE_RANK[f.id][1])} ${PRIO_NAME[FICHE_RANK[f.id][1]]}. ${notes.length ? `Le résumé du jeu Hyperscale, puis ta note de cours complète (vault **cours-sisr-main**) : ${notes.map(n => `*${n.name}*`).join(', ')}.` : "Le résumé du jeu Hyperscale. Ton cours (vault **cours-sisr-main**) n'a pas de note sur ce sujet, propre au datacenter : cette fiche en tient lieu."}
 
 ${html2md(f.html)}
 
@@ -136,9 +138,17 @@ tags: [jeu-sisr, sommaire]
 
 ← ${ACCUEIL}
 
-Les ${FICHES.length} fiches du jeu, dans l'ordre où on les rencontre en jouant. Coche la propriété \`revise\` dans chaque fiche, puis suis ta progression dans [[Progression.base|Progression]].
+Les ${FICHES.length} fiches du jeu, classées **par facilité, puis par priorité** : d'abord le plus facile, et à difficulté égale le plus important pour le BTS SIO SISR. C'est aussi l'ordre où le jeu les enseigne, à deux exceptions près, imposées par le jeu : la recette arrive avec le premier contrat client, et les ports TCP et UDP avec le pare-feu. L'urbanisation de la salle passe en premier : il faut la connaître pour poser sa première baie.
 
-${FICHES.map(f => `${FICHES.indexOf(f) + 1}. ${ficheLink(f.id)} : ${f.retenir}`).join('\n')}
+Coche la propriété \`revise\` dans chaque fiche, puis suis ta progression dans [[Progression.base|Progression]].
+
+| N° | Fiche | Facilité | Priorité | Enseignée par |
+|---|---|---|---|---|
+${FICHES.map((f, i) => { const c = CONTRACTS.findIndex(x => x.notions.includes(f.id)); return `| ${i + 1} | ${ficheLink(f.id).replace('|', '\\|')} | ${NIV_NAME[FICHE_RANK[f.id][0]]} | ${'★'.repeat(4 - FICHE_RANK[f.id][1])} ${PRIO_NAME[FICHE_RANK[f.id][1]]} | ${f.id === 'recette' ? 'le premier contrat client' : c >= 0 ? (c + 1) + '. ' + CONTRACTS[c].client : '—'} |`; }).join('\n')}
+
+## À retenir, fiche par fiche
+
+${FICHES.map((f, i) => `${i + 1}. ${ficheLink(f.id)} : ${f.retenir}`).join('\n')}
 `);
 
 /* ---------- Incidents ---------- */
@@ -691,6 +701,10 @@ properties:
     displayName: Maîtrisé
   note.fiche:
     displayName: Fiche
+  note.niveau:
+    displayName: Facilité
+  note.priorite:
+    displayName: Priorité
 views:
   - type: table
     name: Fiches à réviser
@@ -700,6 +714,8 @@ views:
         - note.revise == false
     order:
       - file.name
+      - niveau
+      - priorite
       - revise
     sort:
       - property: file.name
@@ -711,6 +727,8 @@ views:
         - file.hasTag("fiche")
     order:
       - file.name
+      - niveau
+      - priorite
       - revise
     sort:
       - property: file.name

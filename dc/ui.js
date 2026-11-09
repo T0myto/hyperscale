@@ -153,6 +153,14 @@ const GOAL_GO = {
   aclssh: () => goRouter('cfg', null, { act: 'deny', proto: 'tcp', src: 'any', dst: 'host 198.51.100.2', port: '22' }),
   aclapply: () => goRouter('cfg'),
   aclshow: () => goRouter('cli', 'show access-lists'),
+  seeups: () => { backToRoom(); select({ t: 'infra', id: 'upsA' }); },
+  heat: () => { backToRoom(); UI.layer = 'chaleur'; S.flags.sawHeat = true; touch(); renderAll(); },
+  blanks: () => {
+    const r = S.racks.findIndex((k, i) => k.kind === 'rack' && slotMap(i).slice(1, RACK_U + 1).some(x => !x));
+    if (r < 0) return;
+    const m = slotMap(r); let u = RACK_U; while (u > 1 && m[u]) u--;
+    openRack(r); UI.face = 'front'; select({ t: 'empty', r, u });
+  },
   clirtr: () => { const r = devsOfKind('router')[0]; if (r) { openWin({ d: r.id }); setWinTab(r.id, 'cli', 'show bgp summary'); } },
 };
 // Étapes d'un contrat client, déduites de ce qu'il demande
@@ -564,8 +572,8 @@ function equipVm(v) {
 function equipEmpty(r, u) {
   return `<article class="card"><header><div><div class="eyebrow">Baie ${rackName(r)}</div><h3>U${u} vide</h3></div>${pill('off', 'Libre')}</header>
 <p class="muted">Une unité vide laisse l'air chaud de l'arrière revenir vers l'entrée d'air des serveurs.</p>
-<div class="btnrow"><button class="btn primary" data-act="quick" data-t="blank" data-r="${r}" data-u="${u}">Poser un obturateur (15 $)</button><button class="btn" data-act="quick" data-t="cm" data-r="${r}" data-u="${u}">Poser un guide-câbles (60 $)</button><button class="btn" data-act="shop">Autre équipement…</button></div>
-<button class="btn small" data-act="blankall" data-r="${r}">Obturer toutes les unités vides de la baie</button></article>`;
+<div class="btnrow"><button class="btn primary" data-act="quick" data-t="blank" data-r="${r}" data-u="${u}">Poser un obturateur (${money(CAT.blank.cost)})</button><button class="btn" data-act="quick" data-t="cm" data-r="${r}" data-u="${u}">Poser un guide-câbles (${money(CAT.cm.cost)})</button><button class="btn" data-act="shop">Autre équipement…</button></div>
+<button class="btn small" data-act="blankall" data-r="${r}">Obturer toutes les unités vides de la baie (${money(CAT.blank.cost)} pièce)</button></article>`;
 }
 
 /* ----- Tickets ----- */
@@ -776,8 +784,8 @@ function openFiches(id) {
   const f0 = FICHE(id) || FICHES[0];
   const render = f => {
     const notes = coursOf(f.id);
-    let s = `<div class="fiches"><nav class="flist">${FICHES.map(x => `<button data-f="${x.id}" class="${x.id === f.id ? 'on' : ''}">${esc(x.title)}${S.codex.seen[x.id] ? '' : ' <i class="new" title="Pas encore ouverte">•</i>'}</button>`).join('')}</nav>`;
-    s += `<section class="fbody"><div class="eyebrow">Fiche du jeu</div><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p>`;
+    let s = `<div class="fiches"><nav class="flist">${FICHES.map(x => `<button data-f="${x.id}" class="${x.id === f.id ? 'on' : ''}"><i class="lv lv${ficheRank(x.id)[0]}" title="${NIV_NAME[ficheRank(x.id)[0]]}"></i>${esc(x.title)}${S.codex.seen[x.id] ? '' : ' <i class="new" title="Pas encore ouverte">•</i>'}</button>`).join('')}<p class="lvkey"><i class="lv lv1"></i>facile <i class="lv lv2"></i>intermédiaire <i class="lv lv3"></i>difficile</p></nav>`;
+    s += `<section class="fbody"><div class="eyebrow">Fiche du jeu · <span class="tag lv${ficheRank(f.id)[0]}">${NIV_NAME[ficheRank(f.id)[0]]}</span> <span class="tag">${'★'.repeat(4 - ficheRank(f.id)[1])} ${PRIO_NAME[ficheRank(f.id)[1]]}</span></div><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p>`;
     if (notes.length) {
       s += `<nav class="ctoc"><b>📗 Note${notes.length > 1 ? 's' : ''} de cours complète${notes.length > 1 ? 's' : ''} :</b> ${notes.map((n, i) => `<a href="#cours-${i}" data-goto="${i}">${esc(n.title)}</a>`).join(' · ')}</nav>`;
       s += notes.map((n, i) => `<article class="cours" id="cours-${i}"><div class="eyebrow">📗 Note de cours · vault cours-sisr-main</div><h3>${esc(n.title)}</h3>${noteHtml(n)}</article>`).join('');
@@ -957,6 +965,7 @@ const getVB = () => UI.mode === 'room' ? UI.rvb : UI.vb;
 function svgPoint(e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return { x: q.x / MU, y: q.y / MU }; }
 function select(sel) {
   UI.sel = sel; UI.tab = 'equip';
+  if (sel && sel.t === 'infra' && /^ups/.test(sel.id) && !S.flags.sawUps) { S.flags.sawUps = true; touch(); }
   if (sel && sel.t !== 'pdu' && sel.t !== 'empty' && sel.t !== 'vm' && sel.d) {
     const d = dev(sel.d);
     if (d && (UI.mode !== 'rack' || UI.rack !== d.rack)) { openRack(d.rack); UI.sel = sel; }
@@ -1449,7 +1458,7 @@ function panelClick(e) {
     case 'quick': { const r = act(() => actPlace(b.dataset.t, +b.dataset.r, +b.dataset.u)); if (typeof r !== 'string') { UI.sel = null; renderAll(); } break; }
     case 'blankall': {
       const r = +b.dataset.r, m = slotMap(r); let n = 0;
-      for (let u = 1; u <= RACK_U; u++) if (!m[u] && S.money >= 15) { actPlace('blank', r, u); n++; }
+      for (let u = 1; u <= RACK_U; u++) if (!m[u] && S.money >= CAT.blank.cost) { actPlace('blank', r, u); n++; }
       toast(`${n} obturateur(s) posé(s).`, 'good'); UI.sel = null; derive(); renderAll(); break;
     }
     case 'shop': openShop(); break;
@@ -1543,7 +1552,7 @@ $('#zfit').addEventListener('click', () => {
 $('#backRoom').addEventListener('click', backToRoom);
 $('#rPrev').addEventListener('click', () => { const n = rackNeighbors(UI.rack).prev; if (n >= 0) openRack(n); });
 $('#rNext').addEventListener('click', () => { const n = rackNeighbors(UI.rack).next; if (n >= 0) openRack(n); });
-document.querySelectorAll('[data-layer]').forEach(b => b.addEventListener('click', () => { UI.layer = b.dataset.layer; renderAll(); }));
+document.querySelectorAll('[data-layer]').forEach(b => b.addEventListener('click', () => { UI.layer = b.dataset.layer; if (UI.layer === 'chaleur' && !S.flags.sawHeat) { S.flags.sawHeat = true; touch(); derive(); } renderAll(); }));
 const KEYS = new Set();
 window.addEventListener('keyup', e => KEYS.delete(e.code));
 window.addEventListener('blur', () => KEYS.clear());
@@ -1566,10 +1575,22 @@ function renderAll() { renderView(svg); renderTop(); renderSide(); renderWins();
 const SAVE_KEY = 'hyperscale-dc-v4';
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { } }
 function load(o) {
-  if (!o || o.v !== 4 || !o.devs || !o.power) return false;
+  if (!o || (o.v !== 4 && o.v !== 5) || !o.devs || !o.power) return false;
   S = o;
+  if (S.v === 4) migrateV4();
   S.cli = S.cli || []; S.timers = S.timers || {}; S.flags = S.flags || {}; S.teach = S.teach || [];
   return true;
+}
+// Partie commencée avant le reclassement des notions : les contrats gardent leur état sous leur nouveau numéro,
+// le matériel déjà débloqué reste acquis, et les contrats ajoutés ou déplacés seront proposés à la suite.
+function migrateV4() {
+  const map = { c1: 'c1', c2: 'c2', c3: 'c3', c4: 'c5', c5: 'c6', c6: 'c7', c7: 'c8', c8: 'c10', c9: 'c9', c10: 'c11', c11: 'c16', c12: 'c12', c13: 'c13', c14: 'c14', c15: 'c15', c16: 'c17', c17: 'c18' };
+  const conv = id => map[id] || (/^c\d+$/.test(id || '') ? 'c' + (+id.slice(1) + 1) : id);
+  for (const c of S.contracts) c.id = conv(c.id);
+  for (const v of S.vms) if (v.k) v.k = conv(v.k);
+  for (const c of S.contracts) if (c.state === 'active') for (const u of contractDef(c.id).unlock) if (!S.unlocked.includes(u)) S.unlocked.push(u);
+  S.v = 5;
+  if (!S.contracts.some(c => c.state === 'setup')) offerNext();
 }
 let last = 0, acc = 0, viewT = 0, sideT = 0, liveT = 0, saveT = 0;
 function frame(now) {

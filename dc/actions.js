@@ -10,11 +10,17 @@ function pay(c, what) {
 const ZIF = { Internet: 'wan0', DMZ: 'vlan10', SERVEURS: 'vlan20', ADMIN: 'vlan99', STOCKAGE: 'vlan30' };
 
 /* ---------- Équipements ---------- */
+// Retire les obturateurs des unités où l'on installe un équipement
+function clearBlanks(r, u, h, ignore) {
+  const m = slotMap(r, ignore);
+  for (let k = 0; k < h; k++) { const o = m[u + k]; if (o && dev(o) && kindOf(dev(o)) === 'blank') delete S.devs[o]; }
+}
 function actPlace(type, r, u) {
   const c = CAT[type];
   if (!S.racks[r] || S.racks[r].kind !== 'rack') return "Le matériel s'installe dans tes baies, pas dans la salle opérateurs.";
   if (!fits(type, r, u)) return "Pas assez d'unités libres à cet endroit.";
   const e = pay(c.cost, c.name); if (e) return e;
+  if (type !== 'blank') clearBlanks(r, u, c.u);
   const d = addDevice(type, r, u);
   logEvent(`${c.name}${d.host ? ' ' + d.host : ''} installé en baie ${rackName(r)}, U${u}.`);
   if (typeof learnHook === 'function') learnHook('place', d);
@@ -27,6 +33,7 @@ function actMove(id, r, u) {
   if (!S.racks[r] || S.racks[r].kind !== 'rack') return "Choisis une de tes baies.";
   if (!fits(d.type, r, u, id)) return "Pas assez d'unités libres à cet endroit.";
   if (d.rack !== r) d.psus.forEach(p => { p.out = null; });
+  clearBlanks(r, u, CAT[d.type].u, id);
   d.rack = r; d.u = u;
   logEvent(`${nameOf(d)} déplacé en baie ${rackName(r)}, U${u}.`);
   touch();

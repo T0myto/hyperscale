@@ -51,7 +51,7 @@ function cli(d, lines) {
 /* ---------- Création ---------- */
 function newState() {
   S = {
-    v: 4, money: ECO.start, t: 8 * 60, xp: 0, racks: [], devs: {}, cables: [], vms: [], rules: [], contracts: [], tickets: [],
+    v: 5, money: ECO.start, t: 8 * 60, xp: 0, racks: [], devs: {}, cables: [], vms: [], rules: [], contracts: [], tickets: [],
     codex: { seen: {}, quiz: {} }, unlocked: [...DEFAULT_UNLOCKED], feeds: { A: true, B: true },
     power: { edf: true, batt: 15, battMax: 15, gen: false, genRun: false, genT: 0, ups: { A: { kw: 20, trip: false }, B: { kw: 20, trip: false } }, rows: { A: true } },
     cool: { cracs: [{ slot: 0, ok: true }], contain: {} },
@@ -106,7 +106,7 @@ function fits(type, r, u, ignore) {
   const h = CAT[type].u;
   if (r < 0 || r >= S.racks.length || u < 1 || u + h - 1 > RACK_U) return false;
   const m = slotMap(r, ignore);
-  for (let k = 0; k < h; k++) if (m[u + k]) return false;
+  for (let k = 0; k < h; k++) { const o = m[u + k]; if (o && (type === 'blank' || !dev(o) || kindOf(dev(o)) !== 'blank')) return false; }
   return true;
 }
 
@@ -329,6 +329,12 @@ const CHK = {
   opLink: () => devsOfKind('router').some(r => CAT.router.ports.some(p => p.role === 'wan' && (c => !!c && kindOf(dev(otherEnd(c, r.id, p.id).d)) === 'odf')(portCable(r.id, p.id)))),
   wanLink: () => devsOfKind('fw').some(fw => (c => !!c && kindOf(dev(otherEnd(c, fw.id, 'port1').d)) === 'router')(portCable(fw.id, 'port1'))),
   cmd: c => !!(S.flags.cmds && S.flags.cmds[c]),
+  flag: k => !!S.flags[k],
+  // chaque baie qui porte du matériel alimenté n'a plus aucune unité vide
+  blanked: () => {
+    const rs = S.racks.map((k, i) => i).filter(i => S.racks[i].kind === 'rack' && devsIn(i).some(d => CAT[d.type].psu));
+    return rs.length > 0 && rs.every(r => { const m = slotMap(r); for (let u = 1; u <= RACK_U; u++) if (!m[u]) return false; return true; });
+  },
   vty: () => { const r = devsOfKind('router')[0]; return r ? vtyOf(r) : {}; },
   // nom d'une ACL standard (1-99) qui laisse entrer le réseau ADMIN et lui seul ; celle des lignes VTY en priorité
   stdAdmin: () => {
@@ -765,9 +771,15 @@ function activateContract(cs) {
   def.unlock.forEach(u => { if (!S.unlocked.includes(u)) S.unlocked.push(u); });
   logEvent(`Contrat « ${def.client} » en service : prime de ${money(def.bonus)}.`, 'good');
   if (typeof onContractActive === 'function') onContractActive(cs, def);
-  const idx = CONTRACTS.findIndex(c => c.id === cs.id);
-  const nextId = idx >= 0 ? (CONTRACTS[idx + 1] ? CONTRACTS[idx + 1].id : 'c' + (CONTRACTS.length + 1)) : 'c' + (+cs.id.slice(1) + 1);
-  if (!S.contracts.some(c => c.id === nextId)) S.contracts.push({ id: nextId, state: 'offer' });
+  offerNext();
+}
+
+// Propose le premier contrat du parcours pas encore vu ; après le dernier, des contrats libres numérotés à la suite
+function offerNext() {
+  if (S.contracts.some(c => c.state === 'offer')) return;
+  const miss = CONTRACTS.find(c => !S.contracts.some(x => x.id === c.id));
+  const max = Math.max(CONTRACTS.length, ...S.contracts.map(c => +c.id.slice(1)));
+  S.contracts.push({ id: miss ? miss.id : 'c' + (max + 1), state: 'offer' });
 }
 
 /* ---------- Température ---------- */

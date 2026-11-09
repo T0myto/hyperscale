@@ -260,6 +260,17 @@ interface Te0/0/0
   const rank = id => { const i = order.indexOf(id); return i < 0 ? 999 : i; };
   FICHES.sort((x, y) => rank(x.id) - rank(y.id));
 })();
+// Classement des notions : [facilité, priorité]. Facilité : 1 facile, 2 intermédiaire, 3 difficile.
+// Priorité pour le BTS SIO SISR : 1 indispensable, 2 important, 3 approfondissement.
+// Le parcours suit cet ordre (facilité, puis priorité) autant que le jeu le permet : il faut une baie avant de câbler.
+const FICHE_RANK = {
+  salle: [1, 2], baie: [1, 1], elec: [1, 1], cuivre: [1, 1], switch: [1, 1], ip: [1, 1], virtu: [1, 1], raid: [1, 1], ports: [1, 1],
+  onduleur: [1, 2], froid: [1, 2], fibre: [1, 2], recette: [1, 2],
+  pf: [2, 1], dep: [2, 1], tls: [2, 1], bak: [2, 1], sup: [2, 2], l2sec: [2, 2], attaques: [2, 2],
+  acl: [3, 1], ad: [3, 1], archi: [3, 2], k8s: [3, 3],
+};
+const NIV_NAME = ['', 'Facile', 'Intermédiaire', 'Difficile'], PRIO_NAME = ['', 'Indispensable', 'Important', 'Approfondissement'];
+const ficheRank = id => FICHE_RANK[id] || [2, 2];
 const FICHE = id => FICHES.find(f => f.id === id);
 
 /* =========================================================
@@ -564,7 +575,7 @@ const INCIDENTS = {
   },
 };
 // Pannes introduites après chaque contrat : elles font pratiquer la notion qu'il vient d'apprendre
-const TEACH = { c1: ['psu'], c2: ['crc', 'duplex'], c3: ['disk', 'oom'], c4: ['sfp'], c5: ['scan'], c6: ['ddos'], c7: ['ipdup', 'full'], c8: ['feed'], c9: ['ransom', 'edf'], c10: ['rogue'], c11: ['crac'], c12: ['brute'], c15: ['op'] };
+const TEACH = { c1: ['psu'], c2: ['crc', 'duplex'], c3: ['disk', 'oom'], c4: ['feed'], c5: ['sfp'], c6: ['scan'], c7: ['ddos'], c8: ['ipdup', 'full'], c9: ['ransom', 'edf'], c10: ['crac'], c11: ['rogue'], c12: ['brute'], c15: ['op'] };
 function switchEnd(c) { for (const e of [c.a, c.b]) if (kindOf(dev(e.d)) === 'switch') return e; return c.a; }
 
 /* ---------- Tickets ---------- */
