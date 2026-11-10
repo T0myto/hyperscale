@@ -6,7 +6,7 @@ global.localStorage = { getItem() { return null; }, setItem() {} };
 const src = ['data', 'sim', 'actions', 'learn', 'console', 'cours'].map(f => fs.readFileSync(path.join(GAME, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
 const API = new Function(src + `
 return { COURS, FICHE_RANK, NIV_NAME, PRIO_NAME, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, IF_CMDS, CONF_CMDS, RIF_CMDS, LINE_CMDS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
-  newState, actAccept, actPlace, actPlug, actConnect, actPortCfg, actDeploy, actAddRule, actAddDisk, actSetRaid, actInstallRack, derive, devsOfKind, cmdList,
+  newState, actAccept, actPlace, actPlug, actConnect, actModule, actPortCfg, actDeploy, actAddRule, actAddDisk, actSetRaid, actInstallRack, derive, devsOfKind, cmdList,
   get S(){ return S; }, freeIp };`)();
 const { COURS, FICHE_RANK, NIV_NAME, PRIO_NAME, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES } = API;
 
@@ -60,6 +60,7 @@ for (const d of [rtr, fw, sw, srv, srv2, nas]) d.psus.forEach((_, i) => API.actP
 for (let b = 0; b < 4; b++) API.actAddDisk(nas, b, 'ssd');
 API.actSetRaid(nas, '5');
 const odf = API.devsOfKind('odf')[0];
+API.actModule(rtr, 'Te0/0/0', 'LR');
 API.actConnect('os2', { d: rtr.id, p: 'Te0/0/0' }, { d: odf.id, p: 'OP1' });
 API.actConnect('dac', { d: rtr.id, p: 'Te0/1/0' }, { d: fw.id, p: 'port1' });
 API.actConnect('dac', { d: fw.id, p: 'port2' }, { d: sw.id, p: 'Te1/1/1' });
@@ -516,16 +517,26 @@ tags: [jeu-sisr, reference, cablage, stockage]
 
 | Câble | Norme | Se branche sur | Portée | Modules | Couleur dans le jeu |
 |---|---|---|---|---|---|
-${Object.values(CABLES).map(c => `| **${c.name}** | ${c.std} | ${{ rj45: 'prises RJ45', sfp: 'cages SFP+', qsfp: 'cages QSFP+', fiber: 'cages SFP+ ou QSFP+' }[c.ends]} | ${Object.entries(c.max).map(([s, m]) => `${m} m à ${s / 1000} Gbit/s`).join(', ')} | ${c.noModule ? 'intégrés' : c.module ? c.module + ' aux deux bouts' : '—'} | ${c.color} |`).join('\n')}
+${Object.values(CABLES).map(c => `| **${c.name}** | ${c.std} | ${{ rj45: 'prises RJ45', sfp: 'cages SFP+', qsfp: 'cages QSFP+', fiber: 'cages SFP+ ou QSFP+' }[c.ends]} | ${Object.entries(c.max).map(([s, m]) => `${m} m à ${s / 1000} Gbit/s`).join(', ')} | ${c.noModule ? 'intégrés' : c.media ? Object.keys(MODULES).filter(k => MODULES[k].media === c.media).join(' ou ') + ', le même aux deux bouts' : 'aucun sur une prise RJ45 ; module T dans une cage SFP+'} | ${c.color} |`).join('\n')}
 
 > [!tip] Choisir
-> Dans une baie entre cages SFP+ : un DAC. Entre baies : fibre OM4 et modules SR. Vers un opérateur : fibre OS2 et modules LR. Pour du cuivre 10 Gbit/s au-delà de 55 m : Cat 6A.
+> Dans une baie entre cages SFP+ : un DAC, sans module. Entre baies : fibre OM4 et modules SR. Vers un opérateur : fibre OS2 et modules LR. Pour du cuivre 10 Gbit/s au-delà de 55 m : Cat 6A.
 
-## Modules optiques
+## Modules de cage
 
-| Module | Fibre | Référence SFP+ | Référence QSFP+ | Prix SFP+ / QSFP+ |
-|---|---|---|---|---|
-${Object.values(MODULES).map(m => `| ${m.name} | ${m.long} | ${m.std.sfp || '—'} | ${m.std.qsfp || '—'} | ${m.price.sfp != null ? mo(m.price.sfp) : '—'} / ${m.price.qsfp != null ? mo(m.price.qsfp) : '—'} |`).join('\n')}
+Un module s'insère à la main, comme dans Packet Tracer : double-clic sur l'équipement, onglet **Physique**, carte **Modules**. Choisis un module dans la liste, puis clique une cage vide. Un clic sur une cage occupée retire le module ; s'il marche, il est remboursé.
+
+| Module | Norme | Débit et câble | Portée | Référence SFP+ | Référence QSFP+ | Prix SFP+ / QSFP+ |
+|---|---|---|---|---|---|---|
+${Object.values(MODULES).map(m => `| **${m.name}** | ${Object.values(m.norm).join(' / ')} | ${m.long} | ${m.reach} | ${m.std.sfp || '—'} | ${m.std.qsfp || '—'} | ${m.price.sfp != null ? mo(m.price.sfp) : '—'} / ${m.price.qsfp != null ? mo(m.price.qsfp) : '—'} |`).join('\n')}
+
+> [!important] Les règles
+> - Une fibre demande un module dans **chaque** cage, le **même** aux deux bouts (SR avec SR, pas SR avec SX).
+> - Le module doit aller avec la fibre : SX ou SR sur de la multimode OM4, LX ou LR sur de la monomode OS2.
+> - Vers l'opérateur : fibre OS2 et module LR.
+> - Le lien prend le débit le plus faible : deux modules 1 Gbit/s dans des cages 10 Gbit/s donnent 1 Gbit/s.
+> - Avec un module cuivre T, la cage se câble comme une prise RJ45.
+> - Un DAC a ses modules intégrés : la cage doit être vide.
 
 ## Disques
 
@@ -656,7 +667,9 @@ tags: [jeu-sisr, memo, glossaire]
 | **err-disabled** | Port coupé automatiquement par une protection |
 | **GTB** | Gestion technique du bâtiment : électricité, climatisation, alarmes |
 | **Hyperviseur** | Système qui fait tourner des machines virtuelles (Proxmox, ESXi) |
-| **LR, SR** | Modules optiques longue portée (monomode) et courte portée (multimode) |
+| **LR, SR** | Modules optiques 10 Gbit/s longue portée (monomode) et courte portée (multimode) |
+| **LX, SX** | Les mêmes en 1 Gbit/s : longue portée (monomode) et courte portée (multimode) |
+| **Module T** | Module cuivre 10GBASE-T : donne une prise RJ45 à une cage SFP+ |
 | **ODF** | Tiroir optique où arrivent les fibres des opérateurs |
 | **OM4, OS2** | Fibre multimode turquoise, fibre monomode jaune |
 | **PDU** | Bandeau de prises de la baie, alimenté par une voie électrique |
@@ -835,9 +848,9 @@ tags: [jeu-sisr, jeu]
 | \`dc/ui.js\` | Panneaux, fenêtres, recette, console, boucle de jeu |
 
 > [!tip] Prendre en main
-> - Le panneau **Contrats** donne les étapes une par une. Le bouton « 👉 Montrer » t'amène au bon endroit, « Pourquoi ? » ouvre la fiche de cours.
+> - Le panneau **Contrats** donne les étapes une par une. Le bouton « Montrer » t'amène au bon endroit, « Pourquoi ? » ouvre la fiche de cours.
 > - Dans la salle : clic sur une baie pour l'ouvrir, glisser pour déplacer la vue, molette pour zoomer. Dans une baie : F bascule face avant et face arrière, Échap revient à la salle, Espace met en pause.
-> - Un double-clic sur un équipement ouvre sa fenêtre : onglets **Physique** (alimentations, ports, câbles), **Config** (VLAN, RAID, ACL…), **CLI** (vraies commandes Cisco IOS) et **Aide** (mode d'emploi et fiches liées).
+> - Un double-clic sur un équipement ouvre sa fenêtre : onglets **Physique** (alimentations, modules, ports, câbles), **Config** (VLAN, RAID, ACL…), **CLI** (vraies commandes Cisco IOS) et **Aide** (mode d'emploi et fiches liées).
 `);
 
 /* ---------- Nettoyage : notes générées qui n'existent plus (fiches renumérotées, fichiers retirés) ---------- */
