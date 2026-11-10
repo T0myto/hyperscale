@@ -50,7 +50,7 @@ code{background:var(--panel-3);padding:1px 5px;border-radius:5px}
 /* En-tête */
 #top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:var(--panel);border-bottom:2px solid var(--edge)}
 .brand{display:flex;align-items:center;gap:10px;line-height:1.05}
-.brand::before{content:'';width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--c-switch) 0 50%,var(--c-router) 50% 100%);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
+.logo{flex:none;width:38px;height:38px;display:block;filter:drop-shadow(0 2px 3px rgba(28,42,58,.18))}
 .brand>span{display:flex;flex-direction:column}
 .brand b{font-family:var(--f-display);font-weight:900;font-size:20px;letter-spacing:.02em;color:var(--fg)}
 .brand small{font-size:11px;color:var(--dim);font-weight:700}
@@ -501,11 +501,51 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
   .fsel{display:block}
   .fm .fbody{flex:1;padding:14px 14px 22px}
 }
+/* ----- Finitions : en-tête sur une ligne, lisibilité de la salle, mouvement ----- */
+::selection{background:#ffd9b8}
+*{scrollbar-width:thin;scrollbar-color:#c3d0de transparent}
+#top{flex-wrap:nowrap;gap:10px}
+#top>*{flex:none}
+#top .spacer{flex:1 1 0;min-width:0}
+@media (max-width:1320px){.tbtn .tl{display:none}.brand small{display:none}}
+@media (max-width:960px){#top{flex-wrap:wrap}}
+@media (max-width:480px){.tbtn .tl2{display:none}#top .spacer{display:none}#top .seg{margin-right:auto}#view #toasts{top:104px}}
+#toasts{position:absolute;top:58px;right:12px;left:auto;transform:none;align-items:flex-end;width:min(400px,calc(100% - 24px))}
+.toast{text-align:left;animation:toastin .22s ease-out}
+#app:has(#modal:not([hidden])) #toasts{position:fixed;top:6px;right:auto;left:50%;transform:translateX(-50%);align-items:center;width:min(540px,calc(100% - 32px))}
+#hint{padding:7px 12px 7px 34px;font-size:12.5px;font-weight:600;border-width:1px;background:rgba(255,255,255,.92);backdrop-filter:blur(4px);max-width:680px}
+#hint::before{content:'💡';position:absolute;left:10px;top:6px}
+#hint.active{font-weight:800}
+#hint.active::before{content:'👉'}
+/* salle : textes lisibles sur le sol anthracite */
+.rowl{fill:#ffffff;paint-order:stroke;stroke:#2a3037;stroke-width:5px;stroke-linejoin:round}
+.rowoff{fill:#4d5c6d;paint-order:stroke;stroke:#ffffff;stroke-width:4px;stroke-linejoin:round}
+.eslot.off .plusr{display:none}
+.eslot rect{transition:fill .15s,stroke .15s}
+.eslot:not(.off):hover rect{fill:#e3efff}
+.eslot[data-k=cracslot] rect{fill:rgba(255,255,255,.13);stroke:#dfe6ee}
+.eslot[data-k=cracslot] .plusr{fill:#f1f4f8}
+.eslot[data-k=cracslot]:hover rect{fill:rgba(255,255,255,.3);stroke:#ffffff}
+.rk rect:first-of-type{transition:stroke .15s}
+/* boutons et cartes : réponses douces au survol */
+.btn,.tbtn,.nchip,.vmrow,.copt,.item,.chipc,.flist button,.x,.baybtn,.chip,.link{transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s,transform .1s,filter .15s}
+.btn:not(:disabled):hover,.tbtn:hover{transform:translateY(-1px);box-shadow:0 3px 0 var(--edge)}
+.btn.primary:not(:disabled):hover,.tbtn.hl:hover{box-shadow:0 3px 0 #c55800}
+.btn:not(:disabled):active,.tbtn:active{transform:translateY(1px);box-shadow:none}
+.item:not(.locked):hover{border-color:#b9cde6;transform:translateY(-2px)}
+.nchip:hover{transform:translateY(-1px)}
+#modal{animation:fadein .16s ease-out}
+.mbox{animation:pop .22s cubic-bezier(.2,.9,.3,1.1)}
+.win{animation:pop .18s ease-out}
+@keyframes fadein{from{opacity:0}}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.97)}}
+@keyframes toastin{from{opacity:0;transform:translateX(16px)}}
+@media (prefers-reduced-motion:reduce){#modal,.mbox,.win,.toast{animation:none}.btn,.tbtn,.item,.nchip{transition:none}.btn:hover,.tbtn:hover,.item:hover,.nchip:hover{transform:none!important}}
 </style>
 
 <div id="app">
   <header id="top">
-    <div class="brand"><span><b>Hyperscale</b><small>Ton datacenter · BTS SIO SISR</small></span></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="lgBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b8cf5"/><stop offset="1" stop-color="#1b55b0"/></linearGradient><linearGradient id="lgUp" gradientUnits="userSpaceOnUse" x1="0" y1="32" x2="0" y2="12"><stop offset="0" stop-color="#ff9a3d"/><stop offset="1" stop-color="#ff6a00"/></linearGradient></defs><rect width="40" height="40" rx="11" fill="url(#lgBg)"/><rect x="1" y="1" width="38" height="19" rx="10" fill="#ffffff" opacity=".08"/><g fill="#ffffff"><rect x="6" y="25" width="20" height="6" rx="2"/><rect x="6" y="17" width="20" height="6" rx="2" opacity=".9"/><rect x="6" y="9" width="20" height="6" rx="2" opacity=".8"/></g><g fill="#2b7de9" opacity=".45"><rect x="9" y="27.3" width="9" height="1.4" rx=".7"/><rect x="9" y="19.3" width="9" height="1.4" rx=".7"/><rect x="9" y="11.3" width="9" height="1.4" rx=".7"/></g><g fill="#2fe07f"><circle cx="22.5" cy="28" r="1.3"/><circle cx="22.5" cy="20" r="1.3"/><circle cx="22.5" cy="12" r="1.3"/></g><path d="M31.5 31V15" stroke="url(#lgUp)" stroke-width="3.4" stroke-linecap="round"/><path d="M27.3 17.2 31.5 11l4.2 6.2Z" fill="#ff6a00" stroke="#ff6a00" stroke-width="1.4" stroke-linejoin="round"/></svg><span><b>Hyperscale</b><small>Ton datacenter · BTS SIO SISR</small></span></div>
     <div class="stat"><span class="lbl">💰 Argent</span><span class="val" id="money">–</span><span class="sub" id="rate">–</span></div>
     <div class="stat hide-sm"><span class="lbl">⚡ Conso</span><span class="val" id="it">–</span><span class="sub">PUE <span id="pue">–</span></span></div>
     <div class="stat hide-sm"><span class="lbl">🌡️ Température</span><span class="val" id="tmax">–</span><span class="sub">idéal 18 à 27 °C</span></div>
@@ -517,9 +557,9 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
       <button data-speed="5">×5</button>
       <button data-speed="20">×20</button>
     </div>
-    <button class="tbtn hl" id="btnShop"><span aria-hidden="true">🛒</span> Catalogue</button>
-    <button class="tbtn" id="btnFiches"><span aria-hidden="true">📚</span> Fiches de cours</button>
-    <button class="tbtn" id="btnHelp"><span aria-hidden="true">❓</span> Aide</button>
+    <button class="tbtn hl" id="btnShop" title="Catalogue"><span aria-hidden="true">🛒</span><span class="tl2"> Catalogue</span></button>
+    <button class="tbtn" id="btnFiches" title="Fiches de cours"><span aria-hidden="true">📚</span><span class="tl"> Fiches de cours</span></button>
+    <button class="tbtn" id="btnHelp" title="Aide"><span aria-hidden="true">❓</span><span class="tl"> Aide</span></button>
   </header>
 
   <main id="main">
@@ -552,6 +592,7 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
         </div>
       </div>
       <svg id="rackview" aria-label="Baies vues de face : clique un équipement, un port ou un câble"></svg>
+      <div id="toasts" aria-live="polite"></div>
       <p id="hint"></p>
       <div id="console" hidden>
         <header><span>Console</span><select id="ctg" aria-label="Équipement ou VM"></select><span class="spacer"></span><button class="x" id="cclose" aria-label="Fermer la console">×</button></header>
@@ -573,7 +614,6 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
   </main>
   <div id="windows"></div>
   <div id="modal" hidden></div>
-  <div id="toasts" aria-live="polite"></div>
 </div>
 <script src="dc/data.js"></script>
 <script src="dc/sim.js"></script>

@@ -151,14 +151,15 @@ function rackStatus(r) {
 
 /* ---------- Rendu ---------- */
 const ROOM_DEFS = `<defs>
-<pattern id="tiles" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#b9c0c8"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#e6e9ed"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTile)"/>${[[5, 7], [13, 20], [22, 9], [9, 25], [26, 24], [18, 4], [3, 16], [24, 15]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".5" fill="#aab2ba" opacity=".7"/>`).join('')}${[[2.4, 2.4], [0.6 * MU - 2.4, 2.4], [2.4, 0.6 * MU - 2.4], [0.6 * MU - 2.4, 0.6 * MU - 2.4]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".8" fill="#9099a2"/>`).join('')}</pattern>
+<pattern id="tiles" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#5f656c"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#878d94"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTileD)"/>${[[5, 7], [13, 20], [22, 9], [9, 25], [26, 24], [18, 4], [3, 16], [24, 15]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".5" fill="#737980" opacity=".7"/>`).join('')}${[[2.4, 2.4], [0.6 * MU - 2.4, 2.4], [2.4, 0.6 * MU - 2.4], [0.6 * MU - 2.4, 0.6 * MU - 2.4]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".8" fill="#555b62"/>`).join('')}</pattern>
 <linearGradient id="gTile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset="1" stop-color="#8f99a3" stop-opacity=".18"/></linearGradient>
+<linearGradient id="gTileD" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".18"/><stop offset="1" stop-color="#000000" stop-opacity=".12"/></linearGradient>
 <pattern id="perf" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#9fb4cc"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#cfe0f3"/>${[4, 8, 12, 16, 20, 24].map(a => [4, 8, 12, 16, 20, 24].map(b => `<circle cx="${a + 1}" cy="${b + 1}" r="1.25" fill="#5f7fa6"/>`).join('')).join('')}</pattern>
 <pattern id="hot" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#d9b9a3"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#f6dfd0"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTile)"/></pattern>
 <pattern id="rktop" width="4" height="3.4" patternUnits="userSpaceOnUse"><rect width="4" height="3.4" fill="#343a41"/><circle cx="1" cy=".85" r=".8" fill="#14181c"/><circle cx="3" cy="2.55" r=".8" fill="#14181c"/></pattern>
 <linearGradient id="gCrac" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f9fb"/><stop offset="1" stop-color="#c4ccd4"/></linearGradient>
 <pattern id="gravel" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#ece6d6"/><circle cx="3" cy="4" r="1" fill="#d5ccb3"/><circle cx="9" cy="9" r="1.2" fill="#d9d1ba"/></pattern>
-<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#eef2f6"/><rect width="3" height="8" fill="#dde4ec"/></pattern>
+<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#ffffff"/><rect width="3" height="8" fill="#eef1f4"/></pattern>
 </defs>`;
 const m = v => (v * MU).toFixed(1);
 function rr2(x, y, w, h, extra) { return `<rect x="${m(x)}" y="${m(y)}" width="${m(w)}" height="${m(h)}" ${extra || ''}/>`; }
@@ -168,7 +169,8 @@ function renderRoom(svg) {
   // cour et bâtiment
   s += rr2(14.6, 10.6, 1.8, 3.2, 'fill="url(#gravel)" stroke="#cfc6ae"');
   s += `<text x="${m(15.5)}" y="${m(10.45)}" class="rl" text-anchor="middle">Cour</text>`;
-  s += rr2(0, 0, 14.6, 16.4, 'fill="url(#tiles)" stroke="#7b848d" stroke-width="8"');
+  s += rr2(0.1, 0.14, 14.6, 16.4, 'fill="#1c2a3a" opacity=".13" rx="3"');
+  s += rr2(0, 0, 14.6, 16.4, 'fill="url(#tiles)" stroke="#4a4f55" stroke-width="8"');
   s += rr2(14.5, 11.6, 0.2, 1.0, 'fill="#f7fafd"');
   s += rr2(0.6, 16.3, 1.6, 0.2, 'fill="#f7fafd"');
   s += `<text x="${m(1.4)}" y="${m(16.95)}" class="rl" text-anchor="middle">Entrée</text>`;
@@ -199,7 +201,7 @@ function renderRoom(svg) {
       const r = rackAt(row, pos), R = slotRect(row, pos);
       const sel = UI.sel && ((UI.sel.t === 'slot' && UI.sel.row === row && UI.sel.pos === pos) || (UI.sel.t === 'rack' && UI.sel.r === r && r >= 0));
       if (r < 0) {
-        s += `<g class="eslot${powered ? '' : ' off'}" data-k="eslot" data-row="${row}" data-pos="${pos}"><title>${row}${String(pos).padStart(2, '0')} : emplacement libre${powered ? '' : ' (rangée non électrifiée)'}</title>${rr2(R.x + 0.03, R.y + 0.03, R.w - 0.06, R.h - 0.06, `fill="${powered ? 'transparent' : 'url(#hatch)'}" stroke="${sel ? '#ff7a1a' : '#a9b8c8'}" stroke-width="${sel ? 3 : 1.6}" stroke-dasharray="5 4" rx="4"`)}<text x="${m(R.x + R.w / 2)}" y="${m(R.y + R.h / 2 + 0.07)}" class="plusr" text-anchor="middle">+</text></g>`;
+        s += `<g class="eslot${powered ? '' : ' off'}" data-k="eslot" data-row="${row}" data-pos="${pos}"><title>${row}${String(pos).padStart(2, '0')} : emplacement libre${powered ? '' : ' (rangée non électrifiée)'}</title>${rr2(R.x + 0.03, R.y + 0.03, R.w - 0.06, R.h - 0.06, `fill="${powered ? '#ffffff' : 'url(#hatch)'}" stroke="${sel ? '#ff7a1a' : '#a9b8c8'}" stroke-width="${sel ? 3 : 1.6}" stroke-dasharray="5 4" rx="4"`)}<text x="${m(R.x + R.w / 2)}" y="${m(R.y + R.h / 2 + 0.07)}" class="plusr" text-anchor="middle">+</text></g>`;
         continue;
       }
       const k = S.racks[r];
@@ -266,9 +268,13 @@ function renderRoom(svg) {
   placeAvatar();
 }
 function fitRoom(svg) {
-  const box = svg.getBoundingClientRect(), aspect = (box.width || 900) / (box.height || 600);
-  const tw = 16.8 * MU, th = 19.4 * MU;
-  let w = tw, h = th;
-  if (w / h > aspect) h = w / aspect; else w = h * aspect;
-  UI.rvb = { x: -0.2 * MU - (w - tw) / 2, y: -1.1 * MU - (h - th) / 2, w, h };
+  // Cadre la salle dans la zone libre : sous la barre d'outils, au-dessus de l'aide en bas.
+  const box = svg.getBoundingClientRect(), W = box.width || 900, H = box.height || 600;
+  const hint = document.getElementById('hint');
+  const bar = document.getElementById('viewbar');
+  const top = Math.max(58, bar ? bar.offsetTop + bar.offsetHeight + 10 : 0), bot = Math.max(hint ? hint.offsetHeight : 0, 36) + 26, side = 14;
+  const x0 = -0.3 * MU, y0 = -0.25 * MU, cw = 17.0 * MU, ch = 17.5 * MU;
+  const free = Math.max(120, H - top - bot), sc = Math.min((W - 2 * side) / cw, free / ch);
+  const w = W / sc, h = H / sc;
+  UI.rvb = { x: x0 - (w - cw) / 2, y: y0 - top / sc - (free / sc - ch) / 2, w, h };
 }
