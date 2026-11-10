@@ -29,6 +29,8 @@ function act(fn) {
   derive(); renderAll();
   return r;
 }
+// Durée lisible à partir de minutes de jeu : « 40 min », « 3 h », « 2 j »
+const dur = m => { m = Math.max(0, Math.round(m)); return m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} j`; };
 const pill = (st, txt) => `<span class="pill ${st}">${esc(txt)}</span>`;
 const stDot = st => `<i class="dot ${st}"></i>`;
 const rankOf = xp => { let r = RANKS[0][1]; for (const [n, name] of RANKS) if (xp >= n) r = name; return r; };
@@ -37,8 +39,6 @@ function selDev() { return UI.sel && UI.sel.d ? dev(UI.sel.d) : null; }
 
 /* ---------- Barre du haut ---------- */
 function renderTop() {
-  const c = clock(S.t);
-  $('#clk').textContent = `Jour ${c.day} · ${c.hh}:${c.mm}`;
   $('#money').textContent = money(S.money);
   $('#money').classList.toggle('neg', S.money < 0);
   $('#rate').textContent = `+${Math.round(D.rate).toLocaleString('fr-FR')} €/h`;
@@ -346,7 +346,7 @@ function equipCrac(slot) {
   let s = `<article class="card"><header><div><div class="eyebrow">Climatisation de salle</div><h3>${c ? 'CRAC-' + (slot + 1) : 'Emplacement CRAC-' + (slot + 1)}</h3></div>${c ? pill(c.ok ? 'ok' : 'bad', c.ok ? CRAC_KW + ' kW' : 'En panne') : pill('off', 'Libre')}</header>`;
   s += `<div class="kv"><span>Froid disponible</span><b>${cap.total} kW (${cap.crac} CRAC + ${cap.inrow} en rangée)</b><span>Chaleur des baies</span><b>${live(() => (D.itKW || 0).toFixed(2).replace('.', ',') + ' kW')}</b><span>Charge thermique</span><b>${live(() => Math.round((D.coolLoad || 0) * 100) + ' %')}</b></div>`;
   if (!c) s += `<p class="muted">${esc(ROOM_ITEMS.crac.desc)}</p><button class="btn primary" data-act="cracbuy" data-slot="${slot}" ${unlocked('crac') ? '' : 'disabled'}>Installer un CRAC ici (${money(ROOM_ITEMS.crac.cost)})</button>${unlocked('crac') ? '' : '<p class="note">Débloqué par le projet interne de supervision.</p>'}`;
-  else if (!c.ok) s += S.timers['crac' + slot] ? `<p class="infobox">Frigoriste en route : réparation à ${clock(S.timers['crac' + slot]).stamp}.</p>` : `<button class="btn primary" data-act="cracfix" data-slot="${slot}">Appeler le frigoriste (800 €)</button>`;
+  else if (!c.ok) s += S.timers['crac' + slot] ? `<p class="infobox">Frigoriste en route : réparation dans ${dur(S.timers['crac' + slot] - S.t)}.</p>` : `<button class="btn primary" data-act="cracfix" data-slot="${slot}">Appeler le frigoriste (800 €)</button>`;
   else s += `<p class="note">Au-delà de 75 % de charge thermique, l'air soufflé ne suffit plus et toutes les baies se réchauffent.</p>`;
   return s + `<p class="note"><button class="link" data-act="fiche" data-id="froid">Fiche : refroidissement et PUE</button></p></article>`;
 }
@@ -553,8 +553,8 @@ function equipVm(v) {
   const r = D.vm[v.id] || { st: 'down', R: [] }, s0 = SVC[v.svc], host = dev(v.host), def = v.k ? contractDef(v.k) : null;
   let s = (host ? crumb(host, v.name) : '') + `<article class="card"><header><div><div class="eyebrow">VM ${v.vmid} · ${esc(s0.soft)}${def ? ' · ' + esc(def.client) : ' · non déclarée'}</div><h3>${esc(v.name)}</h3></div>${pill(r.st === 'ok' ? 'ok' : r.st === 'deg' ? 'warn' : 'bad', r.st === 'ok' ? 'Opérationnelle' : r.st === 'deg' ? 'Dégradée' : 'En panne')}</header>`;
   s += `<div class="kv"><span>Réseau</span><b>VLAN ${v.vlan} (${VLANS[v.vlan].name}) · ${v.ip}/24</b><span>Passerelle</span><b>${VLANS[v.vlan].gw || 'aucune (non routé)'}</b><span>Ressources</span><b>${v.vcpu} vCPU · ${v.ram} Go · ${v.disk} Go</b><span>Stockage</span><b>${esc(dev(v.sto) ? (v.sto === v.host ? 'local, ' : 'NFS, ') + dev(v.sto).host : '?')}</b>`;
-  if (s0.cert) s += `<span>Certificat</span><b>${v.cert < S.t ? '<span class="bad">expiré</span>' : 'valide jusqu’au ' + clock(v.cert).stamp}${v.acme ? ' · ACME' : ''}</b>`;
-  if (D.backup || v.lastBak) s += `<span>Dernière sauvegarde</span><b>${v.lastBak ? clock(v.lastBak).stamp : 'jamais'}</b>`;
+  if (s0.cert) s += `<span>Certificat</span><b>${v.cert < S.t ? '<span class="bad">expiré</span>' : 'valide encore ' + dur(v.cert - S.t)}${v.acme ? ' · ACME' : ''}</b>`;
+  if (D.backup || v.lastBak) s += `<span>Dernière sauvegarde</span><b>${v.lastBak ? 'il y a ' + dur(S.t - v.lastBak) : 'jamais'}</b>`;
   s += `</div>`;
   if (r.R.length) s += `<h4>Diagnostic, couche par couche</h4><ul class="diag">${[...r.R].sort((a, b) => a.lvl - b.lvl).map(x => `<li class="${x.sev}"><b>Couche ${x.lvl}</b> ${esc(x.msg)}</li>`).join('')}</ul>`;
   s += `<div class="btnrow">`;
@@ -585,7 +585,7 @@ function sideTickets() {
   if (!open.length) s += `<p class="muted">Aucun ticket ouvert.${closed ? ` ${closed} ticket(s) clos.` : ''}</p>`;
   for (const t of open) {
     const def = INCIDENTS[t.type], x = t.ctx, isOpen = UI.openTicket === t.id;
-    s += `<article class="card ticket ${t.fixedAt ? 'fixed' : ''}"><header><div><div class="eyebrow">Ticket n° ${t.id} · signalé par ${esc(t.by)} · ${clock(t.det).stamp}</div><h3>${esc(def.title)}</h3></div>${t.fixedAt ? pill('ok', 'Corrigé') : pill('bad', 'Ouvert')}</header>`;
+    s += `<article class="card ticket ${t.fixedAt ? 'fixed' : ''}"><header><div><div class="eyebrow">Ticket n° ${t.id} · signalé par ${esc(t.by)} · il y a ${dur(S.t - t.det)}</div><h3>${esc(def.title)}</h3></div>${t.fixedAt ? pill('ok', 'Corrigé') : pill('bad', 'Ouvert')}</header>`;
     s += `<p class="alert">${esc(t.by === 'client' ? clientSymptom(t) : def.alert(x))}</p>`;
     if (t.fixedAt) s += `<p class="muted">Le problème est réglé. Documente-le : cause racine et prévention.</p><button class="btn primary" data-act="report" data-id="${t.id}">Rédiger le rapport</button>`;
     else {
@@ -600,7 +600,7 @@ function sideTickets() {
     }
     s += `</article>`;
   }
-  s += `<h4>Journal de la salle</h4><ul class="events">${S.events.slice(0, 30).map(e => `<li class="${e.kind}"><time>${clock(e.t).stamp}</time> ${esc(e.msg)}</li>`).join('')}</ul>`;
+  s += `<h4>Journal de la salle</h4><ul class="events">${S.events.slice(0, 30).map(e => `<li class="${e.kind}">${esc(e.msg)}</li>`).join('')}</ul>`;
   return s;
 }
 function clientSymptom(t) {
@@ -816,7 +816,7 @@ function shuffleIdx(n, seed) { const a = [...Array(n).keys()]; let h = hhash(Str
 function openReport(t) {
   const def = INCIDENTS[t.type], q = def.quiz(t.ctx);
   const block = (name, title, opts) => `<fieldset class="q"><legend><b>${title}</b></legend>${shuffleIdx(opts.length, t.id + name).map(j => `<label class="qo"><input type="radio" name="${name}" value="${j}"> ${esc(opts[j])}</label>`).join('')}</fieldset>`;
-  const s = `<p class="muted">Ticket n° ${t.id} · ${esc(def.title)} · ouvert ${clock(t.det).stamp}, corrigé ${clock(t.fixedAt).stamp} (${Math.round(t.fixedAt - t.det)} min).</p>
+  const s = `<p class="muted">Ticket n° ${t.id} · ${esc(def.title)} · corrigé en ${dur(t.fixedAt - t.det)}.</p>
 ${block('cause', 'Cause racine', q.cause)}${block('prev', 'Ce qui évite que ça se reproduise', q.prev)}
 <div class="btnrow"><button class="btn primary" id="rGo">Clore le ticket</button></div><div id="rOut"></div>`;
   modal("Fiche d'incident", s, m => {

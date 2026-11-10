@@ -309,7 +309,7 @@ function actVm(id, op) {
       if (!v.lastBak) return "Cette VM n'a encore jamais été sauvegardée.";
       v.st = 'restoring'; v.rs = 40; v.encrypted = false; v.fill = Math.min(v.fill, 0.6);
       cli(host, [`# restauration du travail de sauvegarde du ${clock(v.lastBak).stamp}`, `bareos> restore client=${v.name}-fd select current all done`]);
-      logEvent(`Restauration de ${v.name} lancée (données du ${clock(v.lastBak).stamp}).`); break;
+      logEvent(`Restauration de ${v.name} lancée depuis la dernière sauvegarde.`); break;
     case 'reinstall': {
       const e = pay(400, 'la réinstallation'); if (e) return e;
       v.st = 'running'; v.encrypted = false; v.fill = 0.3; v.lastBak = null;

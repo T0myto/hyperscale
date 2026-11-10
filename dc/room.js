@@ -151,8 +151,12 @@ function rackStatus(r) {
 
 /* ---------- Rendu ---------- */
 const ROOM_DEFS = `<defs>
-<pattern id="tiles" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#dfe8f2"/><rect x=".8" y=".8" width="${0.6 * MU - 1.6}" height="${0.6 * MU - 1.6}" rx="2" fill="#f7fafd"/></pattern>
-<pattern id="perf" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#d6e7fc"/>${[6, 12, 18, 24].map(a => [6, 12, 18, 24].map(b => `<circle cx="${a}" cy="${b}" r="1.8" fill="#9cc2f2"/>`).join('')).join('')}</pattern>
+<pattern id="tiles" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#b9c0c8"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#e6e9ed"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTile)"/>${[[5, 7], [13, 20], [22, 9], [9, 25], [26, 24], [18, 4], [3, 16], [24, 15]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".5" fill="#aab2ba" opacity=".7"/>`).join('')}${[[2.4, 2.4], [0.6 * MU - 2.4, 2.4], [2.4, 0.6 * MU - 2.4], [0.6 * MU - 2.4, 0.6 * MU - 2.4]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".8" fill="#9099a2"/>`).join('')}</pattern>
+<linearGradient id="gTile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset="1" stop-color="#8f99a3" stop-opacity=".18"/></linearGradient>
+<pattern id="perf" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#9fb4cc"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#cfe0f3"/>${[4, 8, 12, 16, 20, 24].map(a => [4, 8, 12, 16, 20, 24].map(b => `<circle cx="${a + 1}" cy="${b + 1}" r="1.25" fill="#5f7fa6"/>`).join('')).join('')}</pattern>
+<pattern id="hot" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#d9b9a3"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#f6dfd0"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTile)"/></pattern>
+<pattern id="rktop" width="4" height="3.4" patternUnits="userSpaceOnUse"><rect width="4" height="3.4" fill="#343a41"/><circle cx="1" cy=".85" r=".8" fill="#14181c"/><circle cx="3" cy="2.55" r=".8" fill="#14181c"/></pattern>
+<linearGradient id="gCrac" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f9fb"/><stop offset="1" stop-color="#c4ccd4"/></linearGradient>
 <pattern id="gravel" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#ece6d6"/><circle cx="3" cy="4" r="1" fill="#d5ccb3"/><circle cx="9" cy="9" r="1.2" fill="#d9d1ba"/></pattern>
 <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#eef2f6"/><rect width="3" height="8" fill="#dde4ec"/></pattern>
 </defs>`;
@@ -164,7 +168,7 @@ function renderRoom(svg) {
   // cour et bâtiment
   s += rr2(14.6, 10.6, 1.8, 3.2, 'fill="url(#gravel)" stroke="#cfc6ae"');
   s += `<text x="${m(15.5)}" y="${m(10.45)}" class="rl" text-anchor="middle">Cour</text>`;
-  s += rr2(0, 0, 14.6, 16.4, 'fill="url(#tiles)" stroke="#8aa0b8" stroke-width="7"');
+  s += rr2(0, 0, 14.6, 16.4, 'fill="url(#tiles)" stroke="#7b848d" stroke-width="8"');
   s += rr2(14.5, 11.6, 0.2, 1.0, 'fill="#f7fafd"');
   s += rr2(0.6, 16.3, 1.6, 0.2, 'fill="#f7fafd"');
   s += `<text x="${m(1.4)}" y="${m(16.95)}" class="rl" text-anchor="middle">Entrée</text>`;
@@ -172,7 +176,7 @@ function renderRoom(svg) {
   for (const a of AISLES) {
     const x0 = ROW_X0 - 0.5, w = NPOS * RACK_W + 1.0;
     s += `<g data-k="aisle" data-id="${a.id}"><title>${a.cold ? 'Allée froide' : 'Allée chaude'} ${a.id}${a.cold && S.cool.contain[a.id] ? ' (confinée)' : ''}</title>`;
-    s += rr2(x0, a.y, w, 1.2, a.cold ? 'fill="url(#perf)"' : 'fill="#ffe4d1"');
+    s += rr2(x0, a.y, w, 1.2, a.cold ? 'fill="url(#perf)"' : 'fill="url(#hot)"');
     s += `<text x="${m(x0 + w / 2)}" y="${m(a.y + 0.68)}" class="${a.cold ? 'acold' : 'ahot'}" text-anchor="middle">${a.cold ? 'ALLÉE FROIDE' : 'ALLÉE CHAUDE'} ${a.id}</text>`;
     if (a.cold && S.cool.contain[a.id]) s += rr2(ROW_X0 - 0.05, a.y - 0.04, NPOS * RACK_W + 0.1, 1.28, 'fill="rgba(70,199,255,.08)" stroke="#46c7ff" stroke-width="2" stroke-dasharray="6 4"') + rr2(ROW_X0 - 0.1, a.y, 0.08, 1.2, 'fill="#46c7ff"') + rr2(ROW_X0 + NPOS * RACK_W + 0.02, a.y, 0.08, 1.2, 'fill="#46c7ff"');
     s += `</g>`;
@@ -204,12 +208,14 @@ function renderRoom(svg) {
         continue;
       }
       const st = rackStatus(r), t = D.temp[r] || 20, kw = (D.rackW[r] || 0) / 1000;
-      const fill = UI.layer === 'chaleur' ? tempColor(t) : UI.layer === 'energie' ? `rgba(255,181,71,${Math.min(0.9, 0.12 + kw / 6)})` : '#4a6380';
+      const fill = UI.layer === 'chaleur' ? tempColor(t) : UI.layer === 'energie' ? `rgba(255,181,71,${Math.min(0.9, 0.12 + kw / 6)})` : 'url(#rktop)';
       const n = devsIn(r).filter(d => !['blank', 'cm', 'rogue'].includes(kindOf(d))).length;
       const fy = ROW_FRONT[row] > 0 ? R.y + R.h - 0.07 : R.y + 0.02;
       s += `<g class="rk" data-k="rk" data-r="${r}"><title>${esc(`Baie ${rackName(r)} · ${n} équipement(s) · ${kw.toFixed(2)} kW · ${t.toFixed(1)} °C en entrée`)}</title>`;
-      s += rr2(R.x + 0.02, R.y + 0.02, R.w - 0.04, R.h - 0.04, `fill="${fill}" stroke="${sel ? '#ff7a1a' : '#ffffff'}" stroke-width="${sel ? 4 : 2}" rx="5"`);
-      s += rr2(R.x + 0.06, fy, R.w - 0.12, 0.05, 'fill="#9cd0ff"');
+      s += rr2(R.x + 0.02, R.y + 0.02, R.w - 0.04, R.h - 0.04, `fill="#2a2f35" stroke="${sel ? '#ff7a1a' : '#0e1114'}" stroke-width="${sel ? 4 : 1.5}" rx="3"`);
+      s += rr2(R.x + 0.05, R.y + 0.05, R.w - 0.1, R.h - 0.1, `fill="${fill}" rx="2"`);
+      if (UI.layer !== 'chaleur' && UI.layer !== 'energie') s += rr2(R.x + 0.05, R.y + 0.36, R.w - 0.1, R.h - 0.72, 'fill="#14181c" fill-opacity=".55" rx="2"');
+      s += rr2(R.x + 0.06, fy, R.w - 0.12, 0.05, 'fill="#aab3bc"');
       s += `<text x="${m(R.x + R.w / 2)}" y="${m(R.y + R.h / 2 - 0.05)}" class="rkl" text-anchor="middle">${rackName(r)}</text>`;
       s += `<text x="${m(R.x + R.w / 2)}" y="${m(R.y + R.h / 2 + 0.2)}" class="rks" text-anchor="middle">${n ? n + ' éq.' : 'vide'}</text>`;
       const col = { ok: '#2fe07f', warn: '#ffb020', off: '#ff5a5f', empty: '#c3cfdc' }[st];

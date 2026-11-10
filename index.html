@@ -55,7 +55,7 @@ code{background:var(--panel-3);padding:1px 5px;border-radius:5px}
 .brand b{font-family:var(--f-display);font-weight:900;font-size:20px;letter-spacing:.02em;color:var(--fg)}
 .brand small{font-size:11px;color:var(--dim);font-weight:700}
 .stat{display:flex;flex-direction:column;gap:0;min-width:0;padding:4px 12px;border-radius:12px;background:var(--panel-2);border:1px solid var(--edge)}
-.stat .lbl{font-size:11px;font-weight:800;color:var(--dim)}
+.stat .lbl{font:800 11px var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
 .stat .val{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .stat .sub{font-size:11px;color:var(--dim);white-space:nowrap;font-weight:600}
 #money{color:#b85e00}#money.neg{color:var(--bad)}
@@ -83,31 +83,31 @@ code{background:var(--panel-3);padding:1px 5px;border-radius:5px}
 #hint.active{border-color:var(--accent);color:#b85e00;background:#fff7ef}
 
 /* SVG : baie */
-.rname{font:900 14px var(--f-display);fill:#1c2a3a}
-.rinfo{font:700 8.5px var(--f-body);fill:#5d6e80}
-.unum{font:600 4.4px var(--f-mono);fill:#8a99aa;text-anchor:middle}
-.lbl{font:700 4.8px var(--f-mono);fill:#1c2a3a}
+.rname{font:900 13px var(--f-display);fill:#1c2a3a}
+.rinfo{font:700 8.5px var(--f-body);fill:#3b4652}
+.unum{font:700 4.4px var(--f-mono);fill:#20262c;text-anchor:middle}
+text.lbl{font:700 4.8px var(--f-mono);fill:#1c2a3a}
 .rlbl{font:800 5.4px var(--f-body);fill:#ffffff}
 .model{font:900 7.5px var(--f-display);fill:#ffffff;letter-spacing:.06em}
-.odfl{font:900 6px var(--f-display);fill:#5a4500;letter-spacing:.04em}
+.odfl{font:900 6px var(--f-display);fill:#2a3038;letter-spacing:.04em}
 .tiny{font:700 3.8px var(--f-body);fill:#ffffffcc}
 .tray{font:700 7px var(--f-body);fill:#5d6e80}
 .opl{font:800 7px var(--f-body);fill:#b38600}
 .pdul{font:900 7px var(--f-display);text-anchor:middle}
 .vtxt{font:900 6px var(--f-display);fill:#ffffff;text-anchor:middle;letter-spacing:.08em}
-.plus{font:700 8px var(--f-body);fill:#9aa9b8;text-anchor:middle}
+.plus{font:700 8px var(--f-body);fill:#8a949e;text-anchor:middle}
 .kindl{font:900 5px var(--f-body);fill:#ffffff;letter-spacing:.04em}
 .emptyu{fill:transparent;cursor:pointer}
-.emptyu:hover{fill:rgba(43,125,233,.08)}
-.slot{fill:rgba(24,160,88,.16);stroke:#18a058;stroke-width:.9;cursor:pointer}
-.slot:hover{fill:rgba(24,160,88,.36)}
+.emptyu:hover{fill:rgba(120,180,255,.22)}
+.slot{fill:rgba(47,224,127,.2);stroke:#2fe07f;stroke-width:.9;cursor:pointer}
+.slot:hover{fill:rgba(47,224,127,.45)}
 .dev{cursor:pointer}
 .dev:hover>rect:first-of-type{filter:brightness(1.06)}
 .dsel{fill:none;stroke:var(--accent);stroke-width:2}
 .pt .hitp{fill:transparent;cursor:crosshair}
-.pt .rj{fill:#26313d;stroke:#ffffff;stroke-width:.5}
-.pt .rjin{fill:#3b4856}
-.pt .cage{fill:#c9d3de;stroke:#ffffff;stroke-width:.4}
+.pt .rj{fill:#b9c1c9;stroke:#eef1f4;stroke-width:.4}
+.pt .rjin{fill:#0a0c0f}
+.pt .cage{fill:#aeb7c0;stroke:#e6eaee;stroke-width:.4}
 .pt .lk{fill:transparent}
 .pt.up .lk{fill:#2fe07f}
 .pt.warn .lk{fill:#ffb020;animation:blink .5s steps(2) infinite}
@@ -121,7 +121,7 @@ code{background:var(--panel-3);padding:1px 5px;border-radius:5px}
 .cab .chit{fill:none;stroke:transparent;stroke-width:7;pointer-events:stroke;cursor:pointer}
 .cab:hover path:nth-child(4){stroke-width:3}
 .psu,.pdu,.bay{cursor:pointer}
-.clab{font:700 7px var(--f-body);fill:#3b4b5c}
+.clab{font:700 7px var(--f-body);fill:#f2f5f8;paint-order:stroke;stroke:#101316;stroke-width:1.8px;stroke-linejoin:round}
 /* Salle vue de dessus */
 .vgroup{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .vtitle{font:900 15px var(--f-display);color:var(--fg);padding:0 8px;align-self:center}
@@ -378,7 +378,7 @@ button.chipc{cursor:pointer;font-weight:700}
 .ccard p{margin:0}
 .ccard.cur{border-color:#ffc999;box-shadow:0 0 0 3px #fff0e2,var(--shadow)}
 .ccard.offer{border-style:dashed;border-color:var(--accent)}
-.lbl{margin:6px 0 0;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+p.lbl{margin:6px 0 0;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
 .nchips{display:flex;flex-wrap:wrap;gap:6px}
 .nchip{border:2px solid #c6dcfb;background:#eef5ff;border-radius:999px;padding:4px 11px;font-weight:800;font-size:12.5px;color:#1e5fb8;cursor:pointer}
 .nchip:hover{background:#dcebff}
@@ -504,7 +504,6 @@ label.chk{display:flex;gap:8px;align-items:center;font-size:13.5px}
 <div id="app">
   <header id="top">
     <div class="brand"><span><b>Hyperscale</b><small>Ton datacenter · BTS SIO SISR</small></span></div>
-    <div class="stat"><span class="lbl">🕒 Heure</span><span class="val" id="clk">–</span></div>
     <div class="stat"><span class="lbl">💰 Argent</span><span class="val" id="money">–</span><span class="sub" id="rate">–</span></div>
     <div class="stat hide-sm"><span class="lbl">⚡ Conso</span><span class="val" id="it">–</span><span class="sub">PUE <span id="pue">–</span></span></div>
     <div class="stat hide-sm"><span class="lbl">🌡️ Température</span><span class="val" id="tmax">–</span><span class="sub">idéal 18 à 27 °C</span></div>

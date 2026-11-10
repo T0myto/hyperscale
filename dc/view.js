@@ -130,7 +130,7 @@ function portSVG(d, p, o) {
   let s = `<g class="pt ${portClass(d, p)}" data-k="port" data-d="${d.id}" data-p="${esc(p.id)}"><title>${esc(tip)}</title>`;
   s += `<rect class="hitp" x="${x - 1.5}" y="${y - 1.5}" width="${L.w + 3}" height="${L.h + 3}"/>`;
   if (p.t === 'rj45') {
-    s += `<rect class="rj" x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="0.6"/><rect class="rjin" x="${x + 1.5}" y="${y + 1.4}" width="${L.w - 3}" height="${L.h - 2.6}"/>`;
+    s += `<rect class="rj" x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="0.6"/><rect class="rjin" x="${x + 1.5}" y="${y + 1.4}" width="${L.w - 3}" height="${L.h - 2.6}"/><rect x="${x + 2.2}" y="${y + 1.7}" width="${L.w - 4.4}" height=".7" fill="#c9a227" opacity=".85" pointer-events="none"/>`;
     s += `<rect class="lk" x="${x + 0.6}" y="${y + 0.5}" width="1.6" height="1.2"/>`;
   } else {
     s += `<rect class="cage" x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="0.5"/>`;
@@ -150,9 +150,9 @@ function psuSVG(d, o) {
     const tip = `${nameOf(d)} PSU${i + 1} · ${!p.ok ? 'EN PANNE' : p.out ? 'branchée sur PDU ' + p.out.pdu + (live ? '' : ' (sans courant)') : 'non branchée'}`;
     const x = o.x + L.x, y = o.y + L.y;
     return `<g class="psu${sel ? ' sel' : ''}" data-k="psu" data-d="${d.id}" data-i="${i}"><title>${esc(tip)}</title>
-<rect x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="1.5" fill="#46566a" stroke="${sel ? '#ff7a1a' : '#ffffff'}" stroke-width="${sel ? 1.2 : 0.5}"/>
-${Array.from({ length: Math.floor(L.w / 3) }, (_, k) => `<rect x="${x + 1.5 + k * 3}" y="${y + 1.5}" width="1.4" height="${L.h - 3}" rx=".5" fill="#33414f"/>`).join('')}
-<rect x="${x + L.w - 6}" y="${y + L.h / 2 - 2.5}" width="4.5" height="5" rx="0.8" fill="#1c2a3a" stroke="#ffffff" stroke-width="0.3"/>
+<rect x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="1.2" fill="url(#gSteel)" stroke="${sel ? '#ff7a1a' : '#4c555e'}" stroke-width="${sel ? 1.2 : 0.5}"/>
+<rect x="${x + 1.2}" y="${y + 1.2}" width="${L.w - 8.4}" height="${L.h - 2.4}" rx=".6" fill="url(#pVent)"/>
+<rect x="${x + L.w - 6.2}" y="${y + L.h / 2 - 2.8}" width="5" height="5.6" rx="0.8" fill="#07090b" stroke="#4c555e" stroke-width="0.3"/>
 ${led(x + 2.5, y + L.h - 2.5, col, !p.ok ? 'pulse' : '')}</g>`;
   }).join('');
 }
@@ -162,42 +162,52 @@ ${led(x + 2.5, y + L.h - 2.5, col, !p.ok ? 'pulse' : '')}</g>`;
 const KIND_COL = { server: '#18a058', nas: '#8b5cf6', switch: '#2b7de9', router: '#ff8a1f', fw: '#e5484d', odf: '#f2b705', cm: '#7d8ea1', blank: '#b8c4d0', rogue: '#e5484d' };
 const KIND_NAME = { server: 'SERVEUR', nas: 'STOCKAGE', switch: 'SWITCH', router: 'ROUTEUR', fw: 'PARE-FEU' };
 const kindCol = d => KIND_COL[kindOf(d)] || '#7d8ea1';
-const body = (x, y, w, h, col, extra) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${col}" stroke="#1c2a3a" stroke-opacity=".25" stroke-width="0.6" ${extra || ''}/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="url(#gGloss)" pointer-events="none"/>`;
+// Châssis en métal sombre brossé ; la couleur du type reste en liseré sur le bord gauche de la façade
+const body = (x, y, w, h, col, extra) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.6" fill="url(#gMetal)" stroke="#0e1114" stroke-width="0.6" ${extra || ''}/>`
+  + `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.6" fill="url(#pBrush)" pointer-events="none"/>`
+  + `<rect x="${x}" y="${y}" width="6" height="${h}" rx="1.6" fill="${col}" pointer-events="none"/><rect x="${x}" y="${y}" width="6" height="${h}" rx="1.6" fill="url(#gGloss)" pointer-events="none"/>`
+  + `<rect x="${x + 6.5}" y="${y + 0.5}" width="${w - 7.5}" height="0.7" fill="#ffffff" opacity=".2" pointer-events="none"/><rect x="${x + 0.5}" y="${y + h - 1}" width="${w - 1}" height="0.8" fill="#000000" opacity=".3" pointer-events="none"/>`;
+// Oreilles de fixation en acier, avec leurs vis
+const screw = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="1.35" fill="#59636d" stroke="#2c3238" stroke-width=".3"/><path d="M${cx - 0.8} ${cy}h1.6M${cx} ${cy - 0.8}v1.6" stroke="#20252a" stroke-width=".35"/>`;
+const earsOf = (x, y, w, h) => [x - 4, x + w - 1].map(ex => `<rect x="${ex}" y="${y + 0.5}" width="5" height="${h - 1}" rx="0.8" fill="url(#gSteel)" stroke="#6b7580" stroke-width=".3"/>${h > 24 ? screw(ex + 2.5, y + 5) + screw(ex + 2.5, y + h - 5) : screw(ex + 2.5, y + h / 2)}`).join('');
+const vent = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1" fill="url(#pVent)" stroke="#0b0d10" stroke-width=".4"/>`;
 function frontSVG(d) {
   const c = CAT[d.type], k = c.kind, o = devOrigin(d), x = o.x, y = o.y, w = W19, h = c.u * U_PX - 1;
   const on = D.powered[d.id], alarm = devAlarm(d), selD = UI.sel && UI.sel.t === 'dev' && UI.sel.d === d.id;
   let s = `<g class="dev" data-k="dev" data-d="${d.id}"><title>${esc(nameOf(d) + ' · ' + c.name + ' · U' + d.u)}</title>`;
-  const ears = `<rect x="${x - 3}" y="${y + 1}" width="4" height="${h - 2}" rx="0.8" fill="#b8c4d0"/><rect x="${x + w - 1}" y="${y + 1}" width="4" height="${h - 2}" rx="0.8" fill="#b8c4d0"/>`;
-  const sticker = d.host ? `<rect x="${x + 162}" y="${y + 3}" width="50" height="7.5" rx="2" fill="#ffffff"/><text x="${x + 164}" y="${y + 8.6}" class="lbl">${esc(d.host)}</text>` : '';
-  const leds = `${led(x + 218, y + h - 5, on ? '#2fe07f' : '#00000040')}${led(x + 225, y + h - 5, alarm ? '#ffb020' : '#00000040', alarm ? 'pulse' : '')}`;
+  const ears = earsOf(x, y, w, h);
+  const sticker = d.host ? `<rect x="${x + 162}" y="${y + 3}" width="50" height="7.5" rx="1" fill="#f6f7f8" stroke="#aab3bc" stroke-width=".3"/><text x="${x + 164}" y="${y + 8.6}" class="lbl">${esc(d.host)}</text>` : '';
+  const leds = `${led(x + 218, y + h - 5, on ? '#2fe07f' : '#00000070')}${led(x + 225, y + h - 5, alarm ? '#ffb020' : '#00000070', alarm ? 'pulse' : '')}`;
   if (k === 'server' || k === 'nas') {
     s += body(x, y, w, h, kindCol(d)) + ears;
-    const bays = d.disks.length, rows = c.u === 2 ? 2 : 1, per = Math.ceil(bays / rows), bw = (152 - (per - 1) * 2) / per, bh = (h - 4) / rows - 1.5;
+    const bays = d.disks.length, rows = c.u === 2 ? 2 : 1, per = Math.ceil(bays / rows), bw = (148 - (per - 1) * 2) / per, bh = (h - 4) / rows - 1.5;
     d.disks.forEach((dk, i) => {
-      const bx = x + 5 + (i % per) * (bw + 2), by = y + 2 + Math.floor(i / per) * ((h - 4) / rows);
+      const bx = x + 10 + (i % per) * (bw + 2), by = y + 2 + Math.floor(i / per) * ((h - 4) / rows);
       const sel = UI.sel && UI.sel.t === 'disk' && UI.sel.d === d.id && UI.sel.bay === i;
       s += `<g class="bay${sel ? ' sel' : ''}" data-k="disk" data-d="${d.id}" data-bay="${i}"><title>${esc(`Baie ${i} · ${dk ? DISKS[dk.type].name + ' · ' + ({ ok: 'en service', failed: 'EN PANNE', rebuild: 'reconstruction ' + Math.round(dk.rb * 100) + ' %' })[dk.st] : 'vide'}`)}</title>`;
       if (dk) {
-        s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1.2" fill="#ffffff" stroke="${sel ? '#ff7a1a' : '#1c2a3a'}" stroke-opacity="${sel ? 1 : 0.25}" stroke-width="${sel ? 1.2 : 0.5}"/>`;
-        for (let g = 0; g < 4; g++) s += `<rect x="${bx + 2 + g * 2.4}" y="${by + 2}" width="1.2" height="${bh - 4}" rx=".5" fill="#d3deeb"/>`;
-        s += `<rect x="${bx + bw - 5}" y="${by + 1.5}" width="1.6" height="${bh - 3}" rx=".6" fill="${dk.type === 'ssd' ? '#2b7de9' : '#ff8a1f'}"/>`;
-        s += led(bx + bw - 2.2, by + bh - 2.2, dk.st === 'failed' ? '#e5484d' : on ? '#18a058' : '#c9d3de', dk.st === 'failed' ? 'pulse' : dk.st === 'rebuild' ? 'blink' : '');
-      } else s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1.2" fill="#00000026" stroke="${sel ? '#ff7a1a' : '#ffffff'}" stroke-opacity="${sel ? 1 : 0.4}" stroke-width="${sel ? 1.2 : 0.5}" stroke-dasharray="${sel ? '' : '1.5 1'}"/><text x="${bx + bw / 2}" y="${by + bh / 2 + 2}" class="plus" fill="#ffffff">+</text>`;
+        // tiroir en acier : grille d'aération, loquet de couleur (bleu SSD, orange HDD), voyant d'activité
+        s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1" fill="url(#gSteel)" stroke="${sel ? '#ff7a1a' : '#4c555e'}" stroke-width="${sel ? 1.2 : 0.4}"/>`;
+        s += `<rect x="${bx + 1.2}" y="${by + 1.2}" width="${bw - 8}" height="${bh - 2.4}" rx=".6" fill="url(#pVent)"/>`;
+        s += `<rect x="${bx + bw - 5.6}" y="${by + 1.2}" width="2.6" height="${bh - 2.4}" rx=".6" fill="${dk.type === 'ssd' ? '#2b7de9' : '#ff8a1f'}"/><rect x="${bx + bw - 5.6}" y="${by + 1.2}" width="2.6" height="${bh - 2.4}" rx=".6" fill="url(#gGloss)"/>`;
+        s += led(bx + bw - 1.5, by + bh - 2.2, dk.st === 'failed' ? '#e5484d' : on ? '#2fe07f' : '#59636d', dk.st === 'failed' ? 'pulse' : dk.st === 'rebuild' ? 'blink' : '');
+      } else s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1" fill="#090b0d" stroke="${sel ? '#ff7a1a' : '#6b7580'}" stroke-width="${sel ? 1.2 : 0.5}" stroke-dasharray="${sel ? '' : '1.5 1'}"/><text x="${bx + bw / 2}" y="${by + bh / 2 + 2}" class="plus">+</text>`;
       s += '</g>';
     });
-    s += sticker + leds;
+    s += vent(x + 162, y + 12, 50, h - 15) + sticker + leds;
   } else if (k === 'switch' || k === 'router' || k === 'fw') {
-    s += body(x, y, w, h, kindCol(d)) + ears;
-    for (let i = 0; i < 12; i++) s += `<rect x="${x + 50 + i * 7}" y="${y + 5}" width="3.5" height="${h - 10}" rx="1.5" fill="#ffffff" opacity=".22"/>`;
-    s += `<text x="${x + 8}" y="${y + h / 2 + 2.5}" class="model">${KIND_NAME[k]}</text><text x="${x + 138}" y="${y + h / 2 + 2.5}" class="model" opacity=".8">${esc(c.short)}</text>` + sticker + leds;
+    s += body(x, y, w, h, kindCol(d)) + ears + vent(x + 52, y + 4, 80, h - 8);
+    s += `<text x="${x + 11}" y="${y + h / 2 + 2.5}" class="model">${KIND_NAME[k]}</text><text x="${x + 138}" y="${y + h / 2 + 2.5}" class="model" opacity=".75">${esc(c.short)}</text>` + sticker + leds;
   } else if (k === 'odf') {
-    s += body(x, y, w, h, KIND_COL.odf) + ears + `<text x="${x + 8}" y="${y + h / 2 + 2}" class="odfl">ODF · ARRIVÉE OPÉRATEURS</text>`;
-    s += `<rect x="${x + 150}" y="${y + 6}" width="8" height="8" rx="1.5" fill="#ffffff"/><rect x="${x + 162}" y="${y + 6}" width="8" height="8" rx="1.5" fill="${S.room.op2 ? '#ffffff' : '#00000030'}"/>`;
+    // tiroir optique : tôle claire, traversées de fibre bleues
+    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.6" fill="url(#gSteel)" stroke="#6b7580" stroke-width=".6"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.6" fill="url(#pBrush)" pointer-events="none"/><rect x="${x}" y="${y}" width="6" height="${h}" rx="1.6" fill="${KIND_COL.odf}"/>` + ears;
+    s += `<text x="${x + 11}" y="${y + h / 2 + 2}" class="odfl">ODF · ARRIVÉE OPÉRATEURS</text>`;
+    [0, 1].forEach(i => { const live = i === 0 || S.room.op2; s += `<rect x="${x + 150 + i * 12}" y="${y + 6}" width="8" height="8" rx="1" fill="${live ? '#1f6fd1' : '#8a949e'}" stroke="#20252a" stroke-width=".4"/><rect x="${x + 151.5 + i * 12}" y="${y + 8}" width="2" height="4" fill="#0b0d10"/><rect x="${x + 154.5 + i * 12}" y="${y + 8}" width="2" height="4" fill="#0b0d10"/>`; });
   } else if (k === 'cm') {
-    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="#dfe7f0" stroke="#9fb0c2" stroke-width=".6"/>${ears}`;
-    for (let i = 0; i < 5; i++) s += `<rect x="${x + 14 + i * 44}" y="${y + 3}" width="26" height="${h - 6}" rx="3" fill="none" stroke="#7d8ea1" stroke-width="1.6"/>`;
+    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.6" fill="url(#gMetal)" stroke="#0e1114" stroke-width=".6"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.6" fill="url(#pBrush)" pointer-events="none"/>${ears}`;
+    for (let i = 0; i < 5; i++) s += `<rect x="${x + 14 + i * 44}" y="${y + 3}" width="26" height="${h - 6}" rx="3" fill="#0b0d10" fill-opacity=".45" stroke="#aab3bc" stroke-width="1.6"/>`;
   } else if (k === 'blank') {
-    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="#eef3f8" stroke="#c3cfdc" stroke-width=".6"/>${ears}<circle cx="${x + 1}" cy="${y + h / 2}" r="1.2" fill="#8a99aa"/><circle cx="${x + w - 1}" cy="${y + h / 2}" r="1.2" fill="#8a99aa"/>`;
+    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.2" fill="#2b3036" stroke="#0e1114" stroke-width=".6"/><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.2" fill="url(#pBrush)" pointer-events="none"/>${ears}`;
   }
   if (selD) s += `<rect x="${x - 4}" y="${y - 1}" width="${w + 8}" height="${h + 2}" rx="2" class="dsel"/>`;
   return s + '</g>';
@@ -209,15 +219,16 @@ function rearSVG(d) {
   if (k === 'rogue') {
     s += `<rect x="${x}" y="${y}" width="44" height="16" rx="3" fill="#ffe1e2" stroke="#e5484d" stroke-width="1.2" class="pulse"/><text x="${x + 15}" y="${y + 11}" class="model" fill="#b42328">???</text>`;
     s += `<line x1="${x + 22}" y1="${y}" x2="${x + 22}" y2="${TOPY + RH}" stroke="#e5484d" stroke-dasharray="2 2" stroke-width=".8"/>`;
-  } else if (k === 'blank') s += `<rect x="${x}" y="${y}" width="${W19}" height="${h}" rx="2" fill="#eef3f8" opacity=".8"/>`;
+  } else if (k === 'blank') s += `<rect x="${x}" y="${y}" width="${W19}" height="${h}" rx="1.2" fill="#2b3036" opacity=".7"/>`;
   else if (k === 'cm') {
-    s += `<rect x="${x}" y="${y}" width="${W19}" height="${h}" rx="2" fill="#dfe7f0" stroke="#9fb0c2" stroke-width=".6"/>`;
-    for (let i = 0; i < 5; i++) s += `<rect x="${x + 14 + i * 44}" y="${y + 3}" width="26" height="${h - 6}" rx="3" fill="none" stroke="#7d8ea1" stroke-width="1.6"/>`;
+    s += `<rect x="${x}" y="${y}" width="${W19}" height="${h}" rx="1.6" fill="url(#gMetal)" stroke="#0e1114" stroke-width=".6"/>`;
+    for (let i = 0; i < 5; i++) s += `<rect x="${x + 14 + i * 44}" y="${y + 3}" width="26" height="${h - 6}" rx="3" fill="#0b0d10" fill-opacity=".45" stroke="#aab3bc" stroke-width="1.6"/>`;
   } else {
-    s += body(x, y, W19, h, kindCol(d)) + `<rect x="${x}" y="${y}" width="${W19}" height="${h}" rx="2" fill="#1c2a3a" opacity=".12" pointer-events="none"/>`;
-    if (k === 'server') s += `<rect x="${x + 56}" y="${y + 2}" width="36" height="${h - 4}" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".55" stroke-width=".6"/><text x="${x + 58}" y="${y + 6}" class="tiny">PCIe 10G</text>`;
-    if (d.host && k !== 'odf') s += `<text x="${x + 120}" y="${y + h / 2 + 2}" class="rlbl">${esc(d.host)}</text>`;
-    if (k === 'odf') s += `<text x="${x + 8}" y="${y + h / 2 + 2}" class="odfl">ODF</text>`;
+    s += body(x, y, W19, h, kindCol(d)) + `<rect x="${x + 6}" y="${y}" width="${W19 - 6}" height="${h}" rx="1.6" fill="#000000" opacity=".16" pointer-events="none"/>`;
+    if (k === 'server') s += `<rect x="${x + 56}" y="${y + 2}" width="36" height="${h - 4}" rx="1" fill="#ffffff" fill-opacity=".07" stroke="#aab3bc" stroke-width=".5"/><text x="${x + 58}" y="${y + 6}" class="tiny">PCIe 10G</text>`;
+    if (k !== 'odf') s += vent(x + 150, y + 3, 38, h - 6);
+    if (d.host && k !== 'odf') s += `<text x="${x + 112}" y="${y + h / 2 + 2}" class="rlbl">${esc(d.host)}</text>`;
+    if (k === 'odf') s += `<text x="${x + 11}" y="${y + h / 2 + 2}" class="rlbl">ODF</text>`;
   }
   s += CAT[d.type].ports.map(p => portSVG(d, p, o)).join('');
   if (k !== 'rogue') s += psuSVG(d, o);
@@ -228,19 +239,25 @@ function rearSVG(d) {
 /* ---------- Baie ---------- */
 function rackSVG(r) {
   const x = rackX(r), T = D.temp[r] || 20, W = (D.rackW[r] || 0) / 1000;
-  const tcol = T > 32 ? '#e5484d' : T > 27 ? '#e09100' : '#18a058';
+  const tcol = T > 32 ? '#c8262b' : T > 27 ? '#b36b00' : '#0f7a43';
   let s = `<g class="rack">`;
-  s += `<rect x="${x + 2}" y="4" width="${RW}" height="${TOPY + RH + 22}" rx="10" fill="#1c2a3a" opacity=".08"/>`;
-  s += `<rect x="${x}" y="0" width="${RW}" height="${TOPY + RH + 22}" rx="10" fill="#ffffff" stroke="#c3cfdc" stroke-width="1.5"/>`;
-  s += `<rect x="${x + 1}" y="1" width="${RW - 2}" height="${TOPY - 6}" rx="9" fill="#f4f8fd"/>`;
-  s += `<text x="${x + 12}" y="18" class="rname">${S.racks[r].row === 'MMR' ? 'Salle MMR · ODF' : 'Baie ' + rackName(r)}</text>`;
-  s += `<text x="${x + (S.racks[r].row === 'MMR' ? 150 : 96)}" y="18" class="rinfo">${W.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} kW · <tspan fill="${tcol}">${T.toFixed(1)} °C</tspan> en entrée</text>`;
+  // armoire en acier noir, plaque d'identification, intérieur sombre
+  s += `<rect x="${x + 4}" y="6" width="${RW}" height="${TOPY + RH + 22}" rx="7" fill="#0b0d10" opacity=".22"/>`;
+  s += `<rect x="${x}" y="0" width="${RW}" height="${TOPY + RH + 22}" rx="7" fill="url(#gFrame)" stroke="#0b0d10" stroke-width="1.2"/>`;
+  s += `<rect x="${x + 8}" y="6" width="${RW - 16}" height="${TOPY - 13}" rx="2.5" fill="url(#gSteel)" stroke="#6b7580" stroke-width=".5"/>`;
+  s += `<rect x="${x + 7}" y="${TOPY - 3}" width="${RW - 14}" height="${RH + 6}" rx="2" fill="url(#gRackIn)" stroke="#050607" stroke-width=".6"/>`;
+  s += `<rect x="${x + 10}" y="${TOPY + RH + 8}" width="${RW - 20}" height="9" rx="2" fill="url(#pVent)" stroke="#0b0d10" stroke-width=".4"/>`;
+  s += `<text x="${x + 14}" y="19.5" class="rname">${S.racks[r].row === 'MMR' ? 'Salle MMR · ODF' : 'Baie ' + rackName(r)}</text>`;
+  s += `<text x="${x + (S.racks[r].row === 'MMR' ? 152 : 98)}" y="19" class="rinfo">${W.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} kW · <tspan fill="${tcol}">${T.toFixed(1)} °C</tspan> en entrée</text>`;
+  // montants 19 pouces : trois perçages carrés par unité
   for (const side of [x + 20, x + 266]) {
-    s += `<rect x="${side}" y="${TOPY}" width="14" height="${RH}" rx="2" fill="#e6eef8"/>`;
+    const left = side === x + 20;
+    s += `<rect x="${side}" y="${TOPY}" width="14" height="${RH}" rx="1" fill="url(#gPost)" stroke="#59636d" stroke-width=".3"/>`;
     for (let u = 1; u <= RACK_U; u++) {
-      const yy = uTop(u, 1);
-      s += `<rect x="${side + 4.5}" y="${yy + 9}" width="5" height="4" rx="1" fill="#c3cfdc"/>`;
-      if (side === x + 20 && (u % 2 === 1 || UI.face === 'front')) s += `<text x="${side + 7}" y="${yy + 7}" class="unum">${u}</text>`;
+      const yy = uTop(u, 1), hx = left ? side + 9 : side + 2;
+      for (const dy of [2.6, 9.5, 16.4]) s += `<rect x="${hx}" y="${yy + dy}" width="3" height="3" rx=".4" fill="#14181c"/>`;
+      s += `<path d="M${side} ${yy + U_PX}h14" stroke="#59636d" stroke-width=".25"/>`;
+      if (left && (u % 2 === 1 || UI.face === 'front')) s += `<text x="${side + 4.6}" y="${yy + 12.6}" class="unum">${u}</text>`;
     }
   }
   // unités vides
@@ -249,17 +266,18 @@ function rackSVG(r) {
     const yy = uTop(u, 1);
     s += `<rect class="emptyu" data-k="empty" data-r="${r}" data-u="${u}" x="${x + X19}" y="${yy + 0.5}" width="${W19}" height="${U_PX - 1}"><title>Baie ${rackName(r)}, U${u} : vide${UI.face === 'front' ? ' (clic : poser un obturateur ou un équipement)' : ''}</title></rect>`;
   }
-  // PDU
+  // PDU : bandeaux noirs, repère de couleur par voie, prises C13
   if (UI.face === 'rear') {
     for (const p of ['A', 'B']) {
       const px = x + (p === 'A' ? 284 : 302), live = pduLive(r, p), load = (D.pdu[r] || {})[p] || 0, pct = load / PDU_CAP;
-      const selP = UI.sel && UI.sel.t === 'pdu' && UI.sel.r === r && UI.sel.p === p;
+      const selP = UI.sel && UI.sel.t === 'pdu' && UI.sel.r === r && UI.sel.p === p, col = p === 'A' ? '#e5484d' : '#2b7de9';
       s += `<g class="pdu${selP ? ' sel' : ''}" data-k="pdu" data-r="${r}" data-p="${p}"><title>${esc(`PDU ${p} (voie ${p}) · ${Math.round(load)} W sur ${PDU_CAP} W · ${(load / 230).toFixed(1)} A${S.racks[r].trip[p] ? ' · DISJONCTÉ' : !S.feeds[p] ? ' · voie coupée' : ''}`)}</title>`;
-      s += `<rect x="${px}" y="${TOPY}" width="14" height="${RH}" rx="3" fill="${p === 'A' ? '#ffe1e2' : '#dde9fd'}" stroke="${selP ? '#ff7a1a' : p === 'A' ? '#e5484d' : '#2b7de9'}" stroke-width="${selP ? 1.6 : 1}"/>`;
-      s += `<text x="${px + 7}" y="${TOPY - 3}" class="pdul" fill="${p === 'A' ? '#e5484d' : '#2b7de9'}">${p}</text>`;
-      s += `<rect x="${px + 2}" y="${TOPY + RH - 4 - (RH - 8) * Math.min(1, pct)}" width="2" height="${(RH - 8) * Math.min(1, pct)}" rx="1" fill="${pct > 1 ? '#e5484d' : pct > 0.5 ? '#e09100' : '#18a058'}"/>`;
-      for (let i = 0; i < 24; i++) { const o = outletXY(r, p, i); s += `<rect x="${o.x - 3}" y="${o.y - 3.5}" width="7" height="7" rx="1.5" fill="#ffffff" stroke="#8a99aa" stroke-width=".5"/>`; }
-      if (!live) s += `<rect x="${px}" y="${TOPY}" width="14" height="${RH}" rx="3" fill="#1c2a3a" opacity=".6"/><text x="${px + 7}" y="${TOPY + RH / 2}" class="vtxt" transform="rotate(-90 ${px + 7} ${TOPY + RH / 2})">${S.racks[r].trip[p] ? 'DISJONCTÉ' : 'VOIE COUPÉE'}</text>`;
+      s += `<rect x="${px}" y="${TOPY}" width="14" height="${RH}" rx="2" fill="url(#gPdu)" stroke="${selP ? '#ff7a1a' : col}" stroke-width="${selP ? 1.6 : 0.9}"/>`;
+      s += `<rect x="${px + 0.6}" y="${TOPY + 0.6}" width="12.8" height="5" rx="1.4" fill="${col}"/><rect x="${px + 0.6}" y="${TOPY + RH - 5.6}" width="12.8" height="5" rx="1.4" fill="${col}"/>`;
+      s += `<text x="${px + 7}" y="${TOPY - 3}" class="pdul" fill="${col}">${p}</text>`;
+      s += `<rect x="${px + 1.4}" y="${TOPY + RH - 8 - (RH - 16) * Math.min(1, pct)}" width="1.6" height="${(RH - 16) * Math.min(1, pct)}" rx=".8" fill="${pct > 1 ? '#ff5a5f' : pct > 0.5 ? '#ffb020' : '#2fe07f'}"/>`;
+      for (let i = 0; i < 24; i++) { const o = outletXY(r, p, i); s += `<rect x="${o.x - 3}" y="${o.y - 3.5}" width="7" height="7" rx="1.2" fill="#07090b" stroke="#59636d" stroke-width=".5"/><path d="M${o.x - 1.4} ${o.y - 1.2}v2.4M${o.x + 0.5} ${o.y - 1.2}v2.4M${o.x + 2.4} ${o.y - 1.2}v2.4" stroke="#8a949e" stroke-width=".5"/>`; }
+      if (!live) s += `<rect x="${px}" y="${TOPY}" width="14" height="${RH}" rx="2" fill="#000000" opacity=".55"/><text x="${px + 7}" y="${TOPY + RH / 2}" class="vtxt" transform="rotate(-90 ${px + 7} ${TOPY + RH / 2})">${S.racks[r].trip[p] ? 'DISJONCTÉ' : 'VOIE COUPÉE'}</text>`;
       s += '</g>';
     }
   }
@@ -267,16 +285,25 @@ function rackSVG(r) {
 }
 
 /* ---------- Rendu complet ---------- */
+// Matières : métal sombre brossé, acier clair, grille perforée, tôle de baie
 const DEFS = `<defs>
-<linearGradient id="gGloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".28"/><stop offset=".5" stop-color="#ffffff" stop-opacity=".05"/><stop offset="1" stop-color="#000000" stop-opacity=".08"/></linearGradient>
-<pattern id="mesh" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#f4f8fd"/><path d="M0 0L6 6M6 0L0 6" stroke="#c3cfdc" stroke-width=".5"/></pattern>
+<linearGradient id="gGloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".3"/><stop offset=".5" stop-color="#ffffff" stop-opacity=".04"/><stop offset="1" stop-color="#000000" stop-opacity=".18"/></linearGradient>
+<linearGradient id="gMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#565e67"/><stop offset=".1" stop-color="#434a52"/><stop offset=".6" stop-color="#31373d"/><stop offset="1" stop-color="#22262b"/></linearGradient>
+<linearGradient id="gSteel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5f7f9"/><stop offset=".45" stop-color="#cfd5db"/><stop offset="1" stop-color="#9aa4ae"/></linearGradient>
+<linearGradient id="gFrame" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#15181c"/><stop offset=".06" stop-color="#3b4148"/><stop offset=".5" stop-color="#2a2f35"/><stop offset=".94" stop-color="#3b4148"/><stop offset="1" stop-color="#15181c"/></linearGradient>
+<linearGradient id="gRackIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c0e11"/><stop offset="1" stop-color="#191d21"/></linearGradient>
+<linearGradient id="gPost" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8a949e"/><stop offset=".45" stop-color="#d9dee3"/><stop offset="1" stop-color="#929ca6"/></linearGradient>
+<linearGradient id="gPdu" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0d0f12"/><stop offset=".5" stop-color="#2c3238"/><stop offset="1" stop-color="#0d0f12"/></linearGradient>
+<pattern id="pBrush" width="46" height="7" patternUnits="userSpaceOnUse"><path d="M0 .8H46M0 3.3H29M14 4.9H46" stroke="#ffffff" stroke-opacity=".055" stroke-width=".35"/><path d="M6 2.1H46M0 5.9H24M30 6.4H46" stroke="#000000" stroke-opacity=".16" stroke-width=".35"/></pattern>
+<pattern id="pVent" width="3" height="2.6" patternUnits="userSpaceOnUse"><rect width="3" height="2.6" fill="#1b1f24"/><circle cx=".75" cy=".65" r=".72" fill="#040506"/><circle cx="2.25" cy="1.95" r=".72" fill="#040506"/></pattern>
+<pattern id="mesh" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="#e3e8ed"/><path d="M0 .6H7M.6 0V7" stroke="#7d8894" stroke-width="1"/></pattern>
 <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs>`;
 function renderView(svg) {
   if (UI.mode === 'room') { renderRoom(svg); applyVB(svg); return; }
   const R = UI.rack;
   let s = DEFS;
-  s += `<rect x="-20" y="-62" width="${RW + 380}" height="22" rx="3" rx="5" fill="url(#mesh)" stroke="#9fb0c2" stroke-width="1"/><text x="-14" y="-66" class="tray">Chemin de câbles en hauteur, vers les autres baies</text>`;
+  s += `<rect x="-20" y="-62" width="${RW + 380}" height="22" rx="3" fill="url(#mesh)" stroke="#59636d" stroke-width="1.2"/><text x="-14" y="-66" class="tray">Chemin de câbles en hauteur, vers les autres baies</text>`;
   s += rackSVG(R);
   // pendant un placement, les obturateurs sont masqués : on voit où le matériel peut prendre leur place
   const devs = devsIn(R).filter(d => !(UI.place && UI.place.type !== 'blank' && kindOf(d) === 'blank'));
@@ -309,7 +336,7 @@ function renderView(svg) {
         const a = { x: o.x + L.x + L.w - 3.7, y: o.y + L.y + L.h / 2 }, b = outletXY(d.rack, p.out.pdu, p.out.i);
         const col = p.out.pdu === 'A' ? '#e5484d' : '#2b7de9';
         const path = roundPoly([[a.x, a.y], [a.x + 6, a.y], [b.x - 6 + (p.out.pdu === 'A' ? -2 : 0), a.y], [b.x - 6, b.y], [b.x, b.y]], 4);
-        s += `<path d="${path}" fill="none" stroke="#ffffff" stroke-width="2.8"/><path d="${path}" fill="none" stroke="${col}" stroke-width="1.5"/>`;
+        s += `<path d="${path}" fill="none" stroke="#050607" stroke-opacity=".6" stroke-width="2.8"/><path d="${path}" fill="none" stroke="${col}" stroke-width="1.6"/><path d="${path}" fill="none" stroke="#ffffff" stroke-opacity=".3" stroke-width=".4"/>`;
         s += `<rect x="${b.x - 2.5}" y="${b.y - 2.5}" width="5" height="5" rx=".8" fill="${col}"/>`;
       });
     }
@@ -320,8 +347,9 @@ function renderView(svg) {
       const sel = UI.sel && UI.sel.t === 'cable' && UI.sel.c === c.id;
       const dash = !L.up ? 'stroke-dasharray="4 3"' : '';
       s += `<g class="cab${sel ? ' sel' : ''}" data-k="cable" data-c="${c.id}"><title>${esc(`${ct.name} ${fmtLen(c.len)} · ${nameOf(dev(c.a.d))} ${c.a.p} ↔ ${nameOf(dev(c.b.d))} ${c.b.p} · ${L.up ? speedName(L.speed) : 'lien coupé : ' + L.why}`)}</title>`;
-      s += `<path d="${path}" class="chit"/><path d="${path}" fill="none" stroke="#ffffff" stroke-width="${sel ? 4.8 : 3.6}"/>`;
+      s += `<path d="${path}" class="chit"/><path d="${path}" fill="none" stroke="#050607" stroke-opacity=".6" stroke-width="${sel ? 4.8 : 3.4}"/>`;
       s += `<path d="${path}" fill="none" stroke="${ct.color}" stroke-width="${sel ? 3 : 2}" ${dash} ${sel ? 'filter="url(#glow)"' : ''}/>`;
+      s += `<path d="${path}" fill="none" stroke="#ffffff" stroke-opacity=".32" stroke-width=".55"/>`;
       if (c.dmg) s += `<path d="${path}" fill="none" stroke="#ff9f1c" stroke-width="1" stroke-dasharray="1 5" class="pulse"/>`;
       if (P.label) s += `<text x="${P.label.x}" y="${P.label.y}" class="clab">${esc(P.label.txt)}</text>`;
       s += '</g>';
