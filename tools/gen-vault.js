@@ -525,7 +525,7 @@ ${Object.values(CABLES).map(c => `| **${c.name}** | ${c.std} | ${{ rj45: 'prises
 
 | Module | Fibre | Référence SFP+ | Référence QSFP+ | Prix SFP+ / QSFP+ |
 |---|---|---|---|---|
-${Object.values(MODULES).map(m => `| ${m.name} | ${m.long} | ${m.std.sfp} | ${m.std.qsfp} | ${mo(m.price.sfp)} / ${mo(m.price.qsfp)} |`).join('\n')}
+${Object.values(MODULES).map(m => `| ${m.name} | ${m.long} | ${m.std.sfp || '—'} | ${m.std.qsfp || '—'} | ${m.price.sfp != null ? mo(m.price.sfp) : '—'} / ${m.price.qsfp != null ? mo(m.price.qsfp) : '—'} |`).join('\n')}
 
 ## Disques
 
@@ -831,12 +831,12 @@ tags: [jeu-sisr, jeu]
 | \`cours/img\` | Images des notes de cours |
 | \`dc/console.js\` | Console et sorties des commandes |
 | \`dc/view.js\` | Dessin d'une baie, face avant et face arrière |
-| \`dc/room.js\` | La salle vue de dessus et le déplacement du technicien |
+| \`dc/room.js\` | La salle vue de dessus |
 | \`dc/ui.js\` | Panneaux, fenêtres, recette, console, boucle de jeu |
 
 > [!tip] Prendre en main
 > - Le panneau **Contrats** donne les étapes une par une. Le bouton « 👉 Montrer » t'amène au bon endroit, « Pourquoi ? » ouvre la fiche de cours.
-> - Dans la salle : flèches ou ZQSD pour marcher, clic sur une baie pour l'ouvrir. Dans une baie : F bascule face avant et face arrière, Échap revient à la salle, Espace met en pause.
+> - Dans la salle : clic sur une baie pour l'ouvrir, glisser pour déplacer la vue, molette pour zoomer. Dans une baie : F bascule face avant et face arrière, Échap revient à la salle, Espace met en pause.
 > - Un double-clic sur un équipement ouvre sa fenêtre : onglets **Physique** (alimentations, ports, câbles), **Config** (VLAN, RAID, ACL…), **CLI** (vraies commandes Cisco IOS) et **Aide** (mode d'emploi et fiches liées).
 `);
 

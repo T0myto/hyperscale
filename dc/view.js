@@ -118,7 +118,7 @@ function portClass(d, p) {
   if (UI.sel && UI.sel.t === 'port' && UI.sel.d === d.id && UI.sel.p === p.id) cls += ' sel';
   if (UI.from) {
     if (UI.from.d === d.id && UI.from.p === p.id) cls += ' sel';
-    else if (!c && p.t === portDef(dev(UI.from.d), UI.from.p).t && kindOf(d) !== 'rogue') cls += ' cand';
+    else if (!c && plugType(d, p) === plugType(dev(UI.from.d), portDef(dev(UI.from.d), UI.from.p)) && kindOf(d) !== 'rogue') cls += ' cand';
   }
   return cls;
 }
@@ -136,7 +136,7 @@ function portSVG(d, p, o) {
     s += `<rect class="cage" x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="0.5"/>`;
     const m = d.mods[p.id];
     if (cab && CABLES[cab.type].noModule) s += `<rect x="${x + 1}" y="${y + 1}" width="${L.w - 2}" height="${L.h - 2}" fill="#111518"/>`;
-    else if (m) s += `<rect x="${x + 1}" y="${y + 1}" width="${L.w - 2}" height="${L.h - 2}" fill="#c3ccd2"/><rect x="${x + 1}" y="${y + L.h - 2.4}" width="${L.w - 2}" height="1.6" fill="${MODULES[m].tab}"/>${d.modFail[p.id] ? `<rect x="${x + 1}" y="${y + 1}" width="${L.w - 2}" height="${L.h - 2}" fill="#ff9f1c" opacity=".45" class="pulse"/>` : ''}`;
+    else if (m) s += `<rect x="${x + 1}" y="${y + 1}" width="${L.w - 2}" height="${L.h - 2}" fill="#c3ccd2"/><rect x="${x + 1}" y="${y + L.h - 2.4}" width="${L.w - 2}" height="1.6" fill="${MODULES[m].tab}"/>${MODULES[m].media === 'cu' ? `<rect x="${x + 2}" y="${y + 1.7}" width="${L.w - 4}" height="${L.h - 4.6}" fill="#0a0c0f"/>` : ''}${d.modFail[p.id] ? `<rect x="${x + 1}" y="${y + 1}" width="${L.w - 2}" height="${L.h - 2}" fill="#ff9f1c" opacity=".45" class="pulse"/>` : ''}`;
     else s += `<rect x="${x + 1.2}" y="${y + 1.2}" width="${L.w - 2.4}" height="${L.h - 2.4}" fill="#07090b"/>`;
     s += `<rect class="lk" x="${x + L.w - 2.2}" y="${y - 1.6}" width="1.8" height="1.1"/>`;
   }
@@ -150,7 +150,7 @@ function psuSVG(d, o) {
     const tip = `${nameOf(d)} PSU${i + 1} · ${!p.ok ? 'EN PANNE' : p.out ? 'branchée sur PDU ' + p.out.pdu + (live ? '' : ' (sans courant)') : 'non branchée'}`;
     const x = o.x + L.x, y = o.y + L.y;
     return `<g class="psu${sel ? ' sel' : ''}" data-k="psu" data-d="${d.id}" data-i="${i}"><title>${esc(tip)}</title>
-<rect x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="1.2" fill="url(#gSteel)" stroke="${sel ? '#ff7a1a' : '#4c555e'}" stroke-width="${sel ? 1.2 : 0.5}"/>
+<rect x="${x}" y="${y}" width="${L.w}" height="${L.h}" rx="1.2" fill="url(#gSteel)" stroke="${sel ? '#e8590c' : '#4c555e'}" stroke-width="${sel ? 1.2 : 0.5}"/>
 <rect x="${x + 1.2}" y="${y + 1.2}" width="${L.w - 8.4}" height="${L.h - 2.4}" rx=".6" fill="url(#pVent)"/>
 <rect x="${x + L.w - 6.2}" y="${y + L.h / 2 - 2.8}" width="5" height="5.6" rx="0.8" fill="#07090b" stroke="#4c555e" stroke-width="0.3"/>
 ${led(x + 2.5, y + L.h - 2.5, col, !p.ok ? 'pulse' : '')}</g>`;
@@ -187,11 +187,11 @@ function frontSVG(d) {
       s += `<g class="bay${sel ? ' sel' : ''}" data-k="disk" data-d="${d.id}" data-bay="${i}"><title>${esc(`Baie ${i} · ${dk ? DISKS[dk.type].name + ' · ' + ({ ok: 'en service', failed: 'EN PANNE', rebuild: 'reconstruction ' + Math.round(dk.rb * 100) + ' %' })[dk.st] : 'vide'}`)}</title>`;
       if (dk) {
         // tiroir en acier : grille d'aération, loquet de couleur (bleu SSD, orange HDD), voyant d'activité
-        s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1" fill="url(#gSteel)" stroke="${sel ? '#ff7a1a' : '#4c555e'}" stroke-width="${sel ? 1.2 : 0.4}"/>`;
+        s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1" fill="url(#gSteel)" stroke="${sel ? '#e8590c' : '#4c555e'}" stroke-width="${sel ? 1.2 : 0.4}"/>`;
         s += `<rect x="${bx + 1.2}" y="${by + 1.2}" width="${bw - 8}" height="${bh - 2.4}" rx=".6" fill="url(#pVent)"/>`;
         s += `<rect x="${bx + bw - 5.6}" y="${by + 1.2}" width="2.6" height="${bh - 2.4}" rx=".6" fill="${dk.type === 'ssd' ? '#2b7de9' : '#ff8a1f'}"/><rect x="${bx + bw - 5.6}" y="${by + 1.2}" width="2.6" height="${bh - 2.4}" rx=".6" fill="url(#gGloss)"/>`;
         s += led(bx + bw - 1.5, by + bh - 2.2, dk.st === 'failed' ? '#e5484d' : on ? '#2fe07f' : '#59636d', dk.st === 'failed' ? 'pulse' : dk.st === 'rebuild' ? 'blink' : '');
-      } else s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1" fill="#090b0d" stroke="${sel ? '#ff7a1a' : '#6b7580'}" stroke-width="${sel ? 1.2 : 0.5}" stroke-dasharray="${sel ? '' : '1.5 1'}"/><text x="${bx + bw / 2}" y="${by + bh / 2 + 2}" class="plus">+</text>`;
+      } else s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1" fill="#090b0d" stroke="${sel ? '#e8590c' : '#6b7580'}" stroke-width="${sel ? 1.2 : 0.5}" stroke-dasharray="${sel ? '' : '1.5 1'}"/><text x="${bx + bw / 2}" y="${by + bh / 2 + 2}" class="plus">+</text>`;
       s += '</g>';
     });
     s += vent(x + 162, y + 12, 50, h - 15) + sticker + leds;
@@ -284,7 +284,7 @@ function rackSVG(r) {
       const px = x + (p === 'A' ? 284 : 302), live = pduLive(r, p), load = (D.pdu[r] || {})[p] || 0, pct = load / PDU_CAP;
       const selP = UI.sel && UI.sel.t === 'pdu' && UI.sel.r === r && UI.sel.p === p, col = p === 'A' ? '#e5484d' : '#2b7de9';
       s += `<g class="pdu${selP ? ' sel' : ''}" data-k="pdu" data-r="${r}" data-p="${p}"><title>${esc(`PDU ${p} (voie ${p}) · ${Math.round(load)} W sur ${PDU_CAP} W · ${(load / 230).toFixed(1)} A${S.racks[r].trip[p] ? ' · DISJONCTÉ' : !S.feeds[p] ? ' · voie coupée' : ''}`)}</title>`;
-      s += `<rect x="${px}" y="${TOPY}" width="14" height="${RH}" rx="2" fill="url(#gPdu)" stroke="${selP ? '#ff7a1a' : col}" stroke-width="${selP ? 1.6 : 0.9}"/>`;
+      s += `<rect x="${px}" y="${TOPY}" width="14" height="${RH}" rx="2" fill="url(#gPdu)" stroke="${selP ? '#e8590c' : col}" stroke-width="${selP ? 1.6 : 0.9}"/>`;
       s += `<rect x="${px + 0.6}" y="${TOPY + 0.6}" width="12.8" height="5" rx="1.4" fill="${col}"/><rect x="${px + 0.6}" y="${TOPY + RH - 5.6}" width="12.8" height="5" rx="1.4" fill="${col}"/>`;
       s += `<text x="${px + 7}" y="${TOPY - 3}" class="pdul" fill="${col}">${p}</text>`;
       s += `<rect x="${px + 1.4}" y="${TOPY + RH - 8 - (RH - 16) * Math.min(1, pct)}" width="1.6" height="${(RH - 16) * Math.min(1, pct)}" rx=".8" fill="${pct > 1 ? '#ff5a5f' : pct > 0.5 ? '#ffb020' : '#2fe07f'}"/>`;

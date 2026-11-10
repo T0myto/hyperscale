@@ -111,6 +111,13 @@ function fits(type, r, u, ignore) {
 }
 
 /* ---------- Câbles ---------- */
+// Débit d'un module : le sien s'il est fixé (1 Gbit/s), sinon celui de la cage
+const modSpeed = (m, t) => MODULES[m].speed || (t === 'qsfp' ? 40000 : 10000);
+// Une cage SFP+ équipée d'un module cuivre se câble comme une prise RJ45
+const plugType = (d, pd) => pd.t === 'sfp' && d.mods[pd.id] === 'T' ? 'rj45' : pd.t;
+// Modules qui existent dans un format de cage
+const modsFor = t => Object.keys(MODULES).filter(k => MODULES[k].price[t] != null);
+const MEDIA_NAME = { mm: 'multimode', sm: 'monomode', cu: 'cuivre' };
 function portCable(d, p) { return S.cables.find(c => (c.a.d === d && c.a.p === p) || (c.b.d === d && c.b.p === p)); }
 function otherEnd(c, d, p) { return (c.a.d === d && c.a.p === p) ? c.b : c.a; }
 function portPos(e) { const d = dev(e.d); return { r: d.rack, u: d.u + CAT[d.type].u / 2 }; }
@@ -124,32 +131,52 @@ const stdLen = m => STD_LEN.find(x => x >= m) || Math.ceil(m / 5) * 5;
 function cableCheck(type, a, b) {
   const ct = CABLES[type], da = dev(a.d), db = dev(b.d), pa = portDef(da, a.p), pb = portDef(db, b.p);
   const res = { ok: false, type, why: '', len: 0, L: 0, cost: 0, mods: [], speed: 0 };
+  const ends = [[a, da, pa], [b, db, pb]];
   if (a.d === b.d && a.p === b.p) { res.why = "C'est le même port."; return res; }
   if (!unlocked(ct.unlock)) { res.why = "Pas encore au catalogue : livre d'autres contrats."; return res; }
-  if (pa.t !== pb.t) { res.why = `Les deux ports ne sont pas du même type (${portTypeName(pa.t)} et ${portTypeName(pb.t)}).`; return res; }
-  const t = pa.t;
-  if (ct.ends === 'rj45' && t !== 'rj45') { res.why = "Un câble cuivre se branche sur deux prises RJ45."; return res; }
-  if (ct.ends === 'sfp' && t !== 'sfp') { res.why = t === 'rj45' ? "Un DAC se branche dans des cages SFP+, pas sur du RJ45." : "Ce DAC est au format SFP+, pas QSFP+."; return res; }
-  if (ct.ends === 'qsfp' && t !== 'qsfp') { res.why = "Ce DAC est au format QSFP+ 40G."; return res; }
-  if (ct.ends === 'fiber' && t === 'rj45') { res.why = "La fibre arrive dans une cage SFP+ ou QSFP+ équipée d'un module, pas dans une prise RJ45."; return res; }
-  const speed = Math.min(pa.speed, pb.speed);
-  res.speed = speed;
-  res.len = cableLen(a, b); res.L = stdLen(res.len);
-  const max = ct.max[speed];
-  if (!max) { res.why = `${ct.name} ne transporte pas ${speedName(speed)}.`; return res; }
-  if (res.L > max) { res.why = `Trop long : il faut ${fmtLen(res.L)}, et ce câble est limité à ${max} m à ${speedName(speed)}.`; return res; }
-  let modCost = 0;
-  for (const [e, d, pd] of [[a, da, pa], [b, db, pb]]) {
-    const cur = d.mods[e.p];
-    if (pd.op) { if (ct.module !== 'LR') { res.why = "L'opérateur livre de la fibre monomode : il faut de l'OS2 et des modules LR."; return res; } continue; }
-    if (ct.noModule) { if (cur) { res.why = `Retire d'abord le module ${cur} de ${e.p} : un DAC a ses modules intégrés.`; return res; } continue; }
-    if (ct.module) {
-      if (cur && cur !== ct.module) { res.why = `${e.p} a déjà un module ${cur}. Il faut des modules ${ct.module} aux deux bouts.`; return res; }
-      if (!cur) { res.mods.push(e); modCost += MODULES[ct.module].price[t]; }
+  if (ct.ends === 'rj45') {
+    // cuivre : une prise RJ45, ou une cage SFP+ équipée d'un module cuivre
+    for (const [e, d, pd] of ends) if (plugType(d, pd) !== 'rj45') {
+      res.why = pd.t === 'qsfp' ? "Un câble cuivre RJ45 ne va pas dans une cage QSFP+."
+        : d.mods[e.p] ? `La cage ${e.p} porte un module optique ${d.mods[e.p]} : un câble cuivre demande une prise RJ45 ou un module cuivre T.`
+        : `Un câble cuivre va sur une prise RJ45. Pour la cage ${e.p}, insère d'abord un module cuivre T (onglet Physique de l'équipement).`;
+      return res;
+    }
+  } else {
+    if (pa.t !== pb.t) { res.why = `Les deux ports ne sont pas du même type (${portTypeName(pa.t)} et ${portTypeName(pb.t)}).`; return res; }
+    const t = pa.t;
+    if (t === 'rj45') { res.why = ct.ends === 'fiber' ? "La fibre arrive dans une cage SFP+ ou QSFP+ équipée d'un module, pas dans une prise RJ45." : "Un DAC se branche dans des cages, pas sur du RJ45."; return res; }
+    if (ct.ends === 'sfp' && t !== 'sfp') { res.why = "Ce DAC est au format SFP+, pas QSFP+."; return res; }
+    if (ct.ends === 'qsfp' && t !== 'qsfp') { res.why = "Ce DAC est au format QSFP+ 40G."; return res; }
+  }
+  let speed = Math.min(pa.speed, pb.speed);
+  if (ct.noModule) for (const [e, d] of ends) if (d.mods[e.p]) { res.why = `Retire d'abord le module ${d.mods[e.p]} de ${e.p} : un DAC a ses modules intégrés.`; return res; }
+  if (ct.ends === 'fiber') {
+    // la fibre ne pose plus ses modules : chaque cage doit déjà porter le bon
+    if ((pa.op || pb.op) && ct.media !== 'sm') { res.why = "L'opérateur livre de la fibre monomode : il faut de l'OS2, et un module LR de ton côté."; return res; }
+    const ms = [];
+    for (const [e, d, pd] of ends) {
+      const cur = d.mods[e.p];
+      if (!cur) { res.why = `La cage ${e.p} de ${nameOf(d)} est vide : insère d'abord un module ${MEDIA_NAME[ct.media]} (${modsFor(pd.t).filter(k => MODULES[k].media === ct.media).join(' ou ')}), dans l'onglet Physique de l'équipement.`; return res; }
+      if (MODULES[cur].media === 'cu') { res.why = `Le module cuivre de ${e.p} attend un câble RJ45, pas une fibre.`; return res; }
+      if (MODULES[cur].media !== ct.media) { res.why = `Le module ${cur} de ${e.p} est fait pour la fibre ${MEDIA_NAME[MODULES[cur].media]}, pas pour la ${ct.name.replace(/^F/, 'f')}.`; return res; }
+      ms.push(cur); speed = Math.min(speed, modSpeed(cur, pd.t));
+    }
+    if (ms[0] !== ms[1]) {
+      res.why = (pa.op || pb.op) ? "L'opérateur émet en 10 Gbit/s avec un module LR : il faut aussi un module LR de ton côté."
+        : `Modules différents aux deux bouts (${ms[0]} et ${ms[1]}) : un lien optique demande le même module de chaque côté.`;
+      return res;
     }
   }
+  res.speed = speed;
+  res.len = cableLen(a, b); res.L = stdLen(res.len);
+  let max = ct.max[speed];
+  if (!max) { res.why = `${ct.name} ne transporte pas ${speedName(speed)}.`; return res; }
+  // un module cuivre 10GBASE-T ne porte pas au-delà de 30 m à 10 Gbit/s
+  if (ct.ends === 'rj45' && speed >= 10000 && (pa.t !== 'rj45' || pb.t !== 'rj45')) max = Math.min(max, 30);
+  if (res.L > max) { res.why = `Trop long : il faut ${fmtLen(res.L)}, et ce câble est limité à ${max} m à ${speedName(speed)}.`; return res; }
   if (portCable(a.d, a.p) || portCable(b.d, b.p)) { res.why = "Un des deux ports est déjà câblé."; return res; }
-  res.cost = Math.round(ct.base + ct.perM * res.L + modCost);
+  res.cost = Math.round(ct.base + ct.perM * res.L);
   res.ok = true;
   return res;
 }
@@ -224,19 +251,24 @@ function linkEval(c) {
     if (k.err) return { up: false, why: `${x.e.p} de ${nameOf(x.d)} est err-disabled (${k.err})`, err: true };
     if (!k.admin) return { up: false, why: `${x.e.p} de ${nameOf(x.d)} est en shutdown`, admin: true };
   }
+  if (ct.ends === 'rj45') for (const x of ends) if (x.pd.t !== 'rj45') {
+    if (x.d.mods[x.e.p] !== 'T') return { up: false, why: `pas de module cuivre dans la cage ${x.e.p} de ${nameOf(x.d)}` };
+    if (x.d.modFail[x.e.p]) return { up: false, why: `le module de ${x.e.p} (${nameOf(x.d)}) est en panne`, optic: true };
+  }
   if (ct.ends === 'fiber') {
     for (const x of ends) {
       if (x.pd.op) { if (!opActive(x.pd.op)) return { up: false, why: `la fibre de l'opérateur ${x.pd.op} est éteinte` }; continue; }
       const m = x.d.mods[x.e.p];
       if (!m) return { up: false, why: `aucun module dans la cage ${x.e.p} de ${nameOf(x.d)}` };
-      if (m !== ct.module) return { up: false, why: `module ${m} dans ${x.e.p} alors que la ${ct.name} demande des modules ${ct.module}` };
+      if (MODULES[m].media !== ct.media) return { up: false, why: `module ${m} dans ${x.e.p} alors que la ${ct.name} demande un module ${MEDIA_NAME[ct.media]}` };
       if (x.d.modFail[x.e.p]) return { up: false, why: `le module de ${x.e.p} (${nameOf(x.d)}) n'émet plus de lumière`, optic: true };
     }
   }
   if (c.cut) return { up: false, why: 'câble sectionné' };
   const need = stdLen(cableLen(c.a, c.b));
   if (need > c.len) return { up: false, why: `câble trop court depuis le déplacement (${fmtLen(c.len)} posé, ${fmtLen(need)} nécessaires)` };
-  const speed = Math.min(ends[0].pd.speed, ends[1].pd.speed);
+  if (ct.ends === 'fiber' && ends[0].d.mods[ends[0].e.p] !== ends[1].d.mods[ends[1].e.p]) return { up: false, why: `modules différents aux deux bouts (${ends[0].d.mods[ends[0].e.p]} et ${ends[1].d.mods[ends[1].e.p]})` };
+  const speed = Math.min(...ends.map(x => ct.ends === 'fiber' && x.d.mods[x.e.p] ? Math.min(x.pd.speed, modSpeed(x.d.mods[x.e.p], x.pd.t)) : x.pd.speed));
   let mismatch = false;
   if (ends[0].pd.t === 'rj45') {
     const dup = ends.map(x => hasCfg(x.d, x.pd) ? cfg(x.d, x.e.p).duplex : 'auto');

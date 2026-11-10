@@ -119,13 +119,19 @@ const CABLES = {
   cat6a: { name: 'Cuivre Cat 6A', ends: 'rj45', color: '#a06bff', perM: 1.4, base: 6, max: { 1000: 100, 10000: 100 }, std: "10GBASE-T", unlock: 'cat6a' },
   dac:   { name: 'DAC SFP+ (twinax)', ends: 'sfp', color: '#41484e', perM: 9, base: 30, max: { 10000: 5 }, noModule: true, std: "10GBASE-CR" },
   dacq:  { name: 'DAC QSFP+ 40G', ends: 'qsfp', color: '#41484e', perM: 22, base: 80, max: { 40000: 5 }, noModule: true, std: "40GBASE-CR4", unlock: 'dacq' },
-  om4:   { name: 'Fibre multimode OM4', ends: 'fiber', color: '#21c7c7', perM: 2.2, base: 12, max: { 10000: 400, 40000: 150 }, module: 'SR', std: "10GBASE-SR", unlock: 'om4' },
-  os2:   { name: 'Fibre monomode OS2', ends: 'fiber', color: '#f2c230', perM: 2.6, base: 14, max: { 10000: 10000, 40000: 10000 }, module: 'LR', std: "10GBASE-LR" },
+  om4:   { name: 'Fibre multimode OM4', ends: 'fiber', color: '#21c7c7', perM: 2.2, base: 12, max: { 1000: 550, 10000: 400, 40000: 150 }, media: 'mm', std: "10GBASE-SR", unlock: 'om4' },
+  os2:   { name: 'Fibre monomode OS2', ends: 'fiber', color: '#f2c230', perM: 2.6, base: 14, max: { 1000: 10000, 10000: 10000, 40000: 10000 }, media: 'sm', std: "10GBASE-LR" },
 };
 const STD_LEN = [0.5, 1, 2, 3, 5, 7, 10, 15, 20, 30];
+// Modules enfichables dans les cages. media : mm = fibre multimode, sm = fibre monomode, cu = cuivre RJ45.
+// speed absent : le module suit le débit de la cage (10 Gbit/s en SFP+, 40 Gbit/s en QSFP+).
+// price : un prix par format de cage ; pas de prix = le module n'existe pas dans ce format.
 const MODULES = {
-  SR: { name: 'SR', long: 'courte portée, multimode', price: { sfp: 60, qsfp: 240 }, tab: '#1b1f22', std: { sfp: 'SFP-10GBase-SR', qsfp: 'QSFP-40G-SR4' } },
-  LR: { name: 'LR', long: 'longue portée, monomode', price: { sfp: 180, qsfp: 700 }, tab: '#2f6fe0', std: { sfp: 'SFP-10GBase-LR', qsfp: 'QSFP-40G-LR4' } },
+  SX: { name: 'SX', long: '1 Gbit/s, courte portée, multimode', media: 'mm', speed: 1000, reach: '550 m', price: { sfp: 25 }, tab: '#1b1f22', std: { sfp: 'GLC-SX-MMD' }, norm: { sfp: '1000BASE-SX' }, unlock: 'om4' },
+  LX: { name: 'LX', long: '1 Gbit/s, longue portée, monomode', media: 'sm', speed: 1000, reach: '10 km', price: { sfp: 45 }, tab: '#2f6fe0', std: { sfp: 'GLC-LH-SMD' }, norm: { sfp: '1000BASE-LX' } },
+  SR: { name: 'SR', long: 'courte portée, multimode', media: 'mm', reach: '400 m', price: { sfp: 60, qsfp: 240 }, tab: '#1b1f22', std: { sfp: 'SFP-10GBase-SR', qsfp: 'QSFP-40G-SR4' }, norm: { sfp: '10GBASE-SR', qsfp: '40GBASE-SR4' }, unlock: 'om4' },
+  LR: { name: 'LR', long: 'longue portée, monomode', media: 'sm', reach: '10 km', price: { sfp: 180, qsfp: 700 }, tab: '#2f6fe0', std: { sfp: 'SFP-10GBase-LR', qsfp: 'QSFP-40G-LR4' }, norm: { sfp: '10GBASE-LR', qsfp: '40GBASE-LR4' } },
+  T:  { name: 'T', long: 'cuivre RJ45, pour un câble Cat 6 ou 6A', media: 'cu', reach: '30 m à 10 Gbit/s', price: { sfp: 90 }, tab: '#c98a00', std: { sfp: 'SFP-10G-T-X' }, norm: { sfp: '10GBASE-T' } },
 };
 const DISKS = {
   ssd: { name: 'SSD 1,92 To', size: 1.92, price: 300 },
@@ -196,7 +202,8 @@ const CONTRACTS = [
     goals: [
       { k: 'shopnet', t: "Installe un routeur de bordure et un pare-feu dans ta baie (Catalogue)", fiche: 'pf', ok: () => devsOfKind('router').length > 0 && devsOfKind('fw').length > 0 },
       { k: 'plugnet', t: "Alimente le routeur et le pare-feu sur les deux voies : PSU1 sur A, PSU2 sur B", fiche: 'elec', ok: () => ['router', 'fw'].every(k => devsOfKind(k).some(CHK.ab)) },
-      { k: 'oplink', t: "Relie le routeur (Te0/0/0) à l'ODF de la salle MMR (OP1) : fibre monomode OS2 avec modules LR", fiche: 'fibre', ok: () => CHK.opLink() },
+      { k: 'opmod', t: "Insère un module LR (monomode, longue portée) dans la cage Te0/0/0 du routeur : double-clique le routeur, onglet Physique, carte Modules", fiche: 'fibre', ok: () => CHK.opLink() || devsOfKind('router').some(r => CAT.router.ports.some(p => p.role === 'wan' && r.mods[p.id] === 'LR')) },
+      { k: 'oplink', t: "Relie cette cage du routeur (Te0/0/0) à l'ODF de la salle MMR (OP1) avec une fibre monomode OS2", fiche: 'fibre', ok: () => CHK.opLink() },
       { k: 'wanlink', t: "Relie le routeur (Te0/1/0) au port WAN du pare-feu (port1) avec un câble DAC", fiche: 'fibre', ok: () => CHK.wanLink() },
       { k: 'clirtr', t: "Vérifie dans l'onglet CLI du routeur que l'opérateur répond : tape show bgp summary", fiche: 'fibre', ok: () => CHK.cmd('show bgp summary') && !!(D.inet && D.inet.ok) },
     ],

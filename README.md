@@ -33,6 +33,7 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
   - **Config** : ports et VLAN, RAID et VM, matrice de flux du pare-feu, ACL et lignes VTY du routeur, avec un testeur de paquets ;
   - **CLI** : vraies commandes Cisco IOS (`conf t`, `interface range`, `switchport`, `access-list`, `ip access-group`, `line vty`…) ;
   - **Aide** : mode d'emploi et fiches liées.
+- **Modules de cage**, comme dans Packet Tracer : dans l'onglet Physique, on choisit un module (SX, LX, SR, LR ou cuivre T) et on l'insère dans une cage SFP+ ou QSFP+. Une fibre demande le même module aux deux bouts, adapté à la fibre ; un DAC n'en a pas besoin.
 - **Console** avec des sorties réalistes (Cisco IOS, Linux, Proxmox, nftables) et la commande équivalente de chaque action.
 - **Incidents** (pannes matérielles, coupures, attaques) détectés par la supervision, le client ou l'IDS, avec une méthode de dépannage par couches OSI.
 - **24 fiches de cours**, classées par facilité puis par priorité (pastille de niveau et étoiles sur chaque fiche) : le résumé du jeu, puis la note de cours complète du vault cours-sisr-main (tableaux, encadrés, schémas Mermaid, images). Les 4 sujets propres au datacenter (baie, froid, salle, onduleurs) n'ont pas de note de cours : la fiche du jeu en tient lieu.
@@ -53,7 +54,7 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 | `cours/img/` | Images des notes de cours |
 | `dc/console.js` | Console, sorties des commandes, mode configuration Cisco IOS |
 | `dc/view.js` | Vue SVG d'une baie |
-| `dc/room.js` | Vue de la salle, déplacement dans les allées |
+| `dc/room.js` | Vue de la salle (sol, allées, rangées, énergie, froid) |
 | `dc/ui.js` | Panneaux, guide des contrats, fenêtres à onglets |
 
 ## Outils

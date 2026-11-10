@@ -35,6 +35,12 @@ const pill = (st, txt) => `<span class="pill ${st}">${esc(txt)}</span>`;
 const stDot = st => `<i class="dot ${st}"></i>`;
 const rankOf = xp => { let r = RANKS[0][1]; for (const [n, name] of RANKS) if (xp >= n) r = name; return r; };
 const nextRank = xp => RANKS.find(([n]) => n > xp);
+// Petite image de la façade d'un équipement, en tête de sa carte (gardée en mémoire par type)
+const _thumbs = {};
+function devThumb(type) {
+  if (!(type in _thumbs)) { try { _thumbs[type] = `<div class="ipic dpic">${catThumb(type)}</div>`; } catch (e) { _thumbs[type] = ''; } }
+  return _thumbs[type];
+}
 function selDev() { return UI.sel && UI.sel.d ? dev(UI.sel.d) : null; }
 
 /* ---------- Barre du haut ---------- */
@@ -67,8 +73,8 @@ function renderTop() {
   }
   let hint = '';
   if (UI.place) hint = `Choisis un emplacement libre (en vert) pour : ${CAT[UI.place.type].name}${UI.place.move ? ' (déplacement)' : UI.place.left > 1 ? ` · encore ${UI.place.left} à placer` : ''} · Échap pour arrêter`;
-  else if (UI.from) hint = `Câblage depuis ${nameOf(dev(UI.from.d))} ${UI.from.p} (baie ${rackName(dev(UI.from.d).rack)}) : clique un second port libre du même type, dans cette baie ou dans une autre · Échap pour annuler`;
-  else if (!inRack) hint = "Salle vue de dessus : flèches ou ZQSD pour marcher, clic sur le sol pour y aller, clic sur une baie pour l'ouvrir. Clique un emplacement libre pour installer une baie.";
+  else if (UI.from) hint = `Câblage depuis ${nameOf(dev(UI.from.d))} ${UI.from.p} (baie ${rackName(dev(UI.from.d).rack)}) : clique un second port libre compatible (il brille), dans cette baie ou dans une autre · Échap pour annuler`;
+  else if (!inRack) hint = "Salle vue de dessus : clique une baie pour l'ouvrir, un emplacement libre pour installer une baie. Glisse pour déplacer la vue, molette pour zoomer.";
   else hint = UI.face === 'rear' ? "Face arrière (allée chaude) : ports, alimentations et PDU. Clique un port libre pour tirer un câble, double-clique un équipement pour sa fenêtre de configuration. Échap : retour à la salle." : "Face avant (allée froide) : disques, voyants et unités vides. Double-clique un équipement pour sa fenêtre de configuration. Ports en face arrière (touche F).";
   $('#hint').textContent = hint;
   $('#hint').classList.toggle('active', !!(UI.place || UI.from));
@@ -128,6 +134,7 @@ const GOAL_GO = {
   clisw: () => { const sw = devsOfKind('switch')[0]; if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli', 'show vlan brief'); } },
   shopnet: () => { const r = firstRack(); if (r !== undefined) { openRack(r); openShop(!devsOfKind('router').length ? 'router' : 'fw'); } },
   plugnet: () => goPlug(['router', 'fw']),
+  opmod: () => { const r = devsOfKind('router')[0]; if (!r) { goPort(); return; } openRack(r.rack); UI.face = 'rear'; select({ t: 'dev', d: r.id }); openWin({ d: r.id }); setWinTab(r.id, 'phys'); const w = WINS.find(x => x.key === 'd:' + r.id), el = w && document.querySelector(`#${w.id} .modcard`); if (el) el.scrollIntoView({ block: 'start' }); },
   oplink: () => { const r = devsOfKind('router')[0]; goPort(r && r.id, 'Te0/0/0'); },
   wanlink: () => { const r = devsOfKind('router')[0]; goPort(r && r.id, 'Te0/1/0'); },
   bpdu: () => { const x = CHK.srvLinks().find(y => !cfg(dev(y.o.d), y.o.p).bpdu) || CHK.srvLinks()[0]; if (x) openWin({ d: x.o.d, p: x.o.p }); },
@@ -186,7 +193,7 @@ function serviceSteps(cs) {
   const rt = devsOfKind('router')[0], acl = rt && rt.acl && CAT.router.ports.filter(p => p.role === 'wan' && wanOp(rt, p.id)).map(p => aclIn(rt, p.id)).find(Boolean);
   if (acl) for (const f of def.flows.filter(x => x[0] === 'Internet')) St.push({ t: `L'ACL ${acl.name} du routeur doit aussi laisser passer ${f[2].toUpperCase()} ${f[3]} vers 203.0.113.10`, fiche: 'acl',
     ok: aclEval(acl.list, { proto: f[2], src: CLIENT_IP, dst: PUB_IP, port: f[3] }).act === 'permit', go: () => goRouter('cfg', null, { act: 'permit', proto: f[2], src: 'any', dst: 'host 203.0.113.10', port: String(f[3]) }) });
-  if (def.needOp2) St.push({ t: 'Achète le second opérateur (onglet Salle) et relie OP2 au routeur (Te0/0/1)', ok: !!(S.room.op2 && D.inet.ops >= 2), fiche: 'archi', go: () => { UI.tab = 'room'; } });
+  if (def.needOp2) St.push({ t: 'Achète le second opérateur (onglet Salle) et insère un module LR dans Te0/0/1 du routeur et relie-le à OP2 en fibre OS2', ok: !!(S.room.op2 && D.inet.ops >= 2), fiche: 'archi', go: () => { UI.tab = 'room'; } });
   if (def.needGen) St.push({ t: 'Installe le groupe électrogène (onglet Salle)', ok: !!S.power.gen, fiche: 'onduleur', go: () => { UI.tab = 'room'; } });
   const r = D.ct[cs.id];
   St.push({ t: 'Teste tout : lance la recette, puis livre le contrat', ok: cs.state === 'active', fiche: 'recette', go: () => openRecette(cs), last: true, ready: !!(r && r.st === 'ok') });
@@ -199,7 +206,7 @@ function guideSteps(cs) {
   St.push({ t: 'Valide la mission', ok: cs.state === 'active', last: true, ready: St.every(x => x.ok) });
   return St;
 }
-const ficheChip = id => FICHE(id) ? `<button class="nchip" data-act="fiche" data-id="${id}" title="Ouvrir la fiche de cours">📘 ${esc(FICHE(id).title)}</button>` : '';
+const ficheChip = id => FICHE(id) ? `<button class="nchip" data-act="fiche" data-id="${id}" title="Ouvrir la fiche de cours">${esc(FICHE(id).title)}</button>` : '';
 function guideHtml(cs, St) {
   const now = St.findIndex(x => !x.ok);
   return `<ol class="guide2">${St.map((x, i) => {
@@ -207,7 +214,7 @@ function guideHtml(cs, St) {
     let act = '';
     if (!x.ok && i === now) {
       if (x.last) act = x.ready ? '' : `<span class="muted">Termine d'abord les étapes au-dessus.</span>`;
-      else act = `<button class="btn small primary" data-act="gstep" data-id="${cs.id}" data-i="${i}">👉 Montrer</button>${x.fiche ? `<button class="link" data-act="fiche" data-id="${x.fiche}">Pourquoi ?</button>` : ''}`;
+      else act = `<button class="btn small primary" data-act="gstep" data-id="${cs.id}" data-i="${i}">Montrer</button>${x.fiche ? `<button class="link" data-act="fiche" data-id="${x.fiche}">Pourquoi ?</button>` : ''}`;
     }
     return `<li class="${cls}"><span>${esc(x.t)}</span>${act ? `<div class="gact">${act}</div>` : ''}</li>`;
   }).join('')}</ol>`;
@@ -235,14 +242,14 @@ function diagHtml(cs) {
   const shown = r.R.filter(x => x.sev !== 'todo' && x.sev !== 'info').slice(0, 4);
   return shown.length ? `<h4>Ce qui bloque encore</h4><ul class="diag">${shown.map(x => `<li class="${x.sev}">${esc(x.msg)}</li>`).join('')}</ul><p class="note">Le diagnostic suit les couches du modèle OSI : énergie et câbles d'abord (1), puis VLAN (2), IP (3), pare-feu (4) et application (7). <button class="link" data-act="fiche" data-id="dep">Fiche : méthode de dépannage</button></p>` : '';
 }
-const rewardHtml = def => `<div class="reward"><span>🎁 Prime <b>${money(def.bonus)}</b></span>${def.rev ? `<span>💶 <b>${money(def.rev)}</b> / h</span>` : ''}${def.unlock.length ? `<span>🔓 ${def.unlock.map(u => esc(unlockName(u))).join(', ')}</span>` : ''}</div>`;
+const rewardHtml = def => `<div class="reward"><span>Prime <b>${money(def.bonus)}</b></span>${def.rev ? `<span>Revenu <b>${money(def.rev)}</b> / h</span>` : ''}${def.unlock.length ? `<span>Débloque : ${def.unlock.map(u => esc(unlockName(u))).join(', ')}</span>` : ''}</div>`;
 function contractCard(cs) {
   const def = contractDef(cs.id);
   const kind = def.mission ? 'Mission' : def.internal ? 'Projet interne' : 'Client';
   if (cs.state === 'offer') {
     return `<article class="card ccard offer"><header><div><div class="eyebrow">Nouveau · chapitre ${def.chap} · ${kind}</div><h3>${esc(def.client)}</h3></div>${pill('offer', 'À signer')}</header><p>${esc(def.what)}</p>
 ${def.notions.length ? `<p class="lbl">Tu vas apprendre</p><div class="nchips">${def.notions.map(ficheChip).join('')}</div>` : ''}${rewardHtml(def)}
-<button class="btn primary big" data-act="accept" data-id="${cs.id}">✍️ ${def.mission ? 'Commencer la mission' : 'Signer le contrat'}</button></article>`;
+<button class="btn primary big" data-act="accept" data-id="${cs.id}">${def.mission ? 'Commencer la mission' : 'Signer le contrat'}</button></article>`;
   }
   const St = guideSteps(cs), n = St.filter(x => x.ok).length;
   let s = `<article class="card ccard cur"><header><div><div class="eyebrow">Chapitre ${def.chap} · ${kind}</div><h3>${esc(def.client)}</h3></div>${pill('todo', `${n} / ${St.length}`)}</header>`;
@@ -250,8 +257,8 @@ ${def.notions.length ? `<p class="lbl">Tu vas apprendre</p><div class="nchips">$
   if (def.notions.length) s += `<p class="lbl">Notions</p><div class="nchips">${def.notions.map(ficheChip).join('')}</div>`;
   s += `<p class="lbl">Étapes</p>` + guideHtml(cs, St);
   const r = D.ct[cs.id];
-  if (def.mission) s += `<button class="btn primary big" data-act="mission" data-id="${cs.id}" ${r && r.st === 'ok' ? '' : 'disabled'}>✅ Valider la mission</button>`;
-  else s += `<button class="btn ${r && r.st === 'ok' ? 'primary' : ''} big" data-act="recette" data-id="${cs.id}">🧪 ${r && r.st === 'ok' ? 'Lancer la recette et livrer' : 'Lancer la recette (tests)'}</button>`;
+  if (def.mission) s += `<button class="btn primary big" data-act="mission" data-id="${cs.id}" ${r && r.st === 'ok' ? '' : 'disabled'}>Valider la mission</button>`;
+  else s += `<button class="btn ${r && r.st === 'ok' ? 'primary' : ''} big" data-act="recette" data-id="${cs.id}">${r && r.st === 'ok' ? 'Lancer la recette et livrer' : 'Lancer la recette (tests)'}</button>`;
   if (!def.mission) s += diagHtml(cs) + contractDetails(cs);
   return s + rewardHtml(def) + '</article>';
 }
@@ -281,8 +288,8 @@ function sideContracts() {
 function openBriefing(cs) {
   const def = contractDef(cs.id);
   const s = `<p class="lead">${esc(def.what)}</p>
-${def.notions.length ? `<h4>Ce que tu vas apprendre</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); return f ? `<article class="ncard"><b>📘 ${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small" data-f="${id}">Lire la fiche</button></article>` : ''; }).join('')}</div>` : ''}
-<p class="note">Le guide pas à pas est dans le panneau de droite. À chaque étape, le bouton « 👉 Montrer » t'amène au bon endroit et « Pourquoi ? » ouvre la fiche de cours.</p>
+${def.notions.length ? `<h4>Ce que tu vas apprendre</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); return f ? `<article class="ncard"><b>${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small" data-f="${id}">Lire la fiche</button></article>` : ''; }).join('')}</div>` : ''}
+<p class="note">Le guide pas à pas est dans le panneau de droite. À chaque étape, le bouton « Montrer » t'amène au bon endroit et « Pourquoi ? » ouvre la fiche de cours.</p>
 <div class="btnrow"><button class="btn primary big" data-close>C'est parti</button></div>`;
   modal(`${def.mission ? 'Mission' : 'Contrat'} : ${def.client}`, s, m => m.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => openFiches(b.dataset.f))));
 }
@@ -291,10 +298,10 @@ function openDebrief(cs, def) {
   const idx = CONTRACTS.findIndex(c => c.id === cs.id), next = CONTRACTS[idx + 1];
   const newChap = next && next.chap !== def.chap ? CHAPTERS.find(x => x.n === next.chap) : null;
   const s = `<p class="lead">+${money(def.bonus)} et +40 XP${def.rev ? `, puis ${money(def.rev)} par heure tant que le service tourne` : ''}.</p>
-${def.unlock.length ? `<p>🔓 Débloqué : <b>${def.unlock.map(u => esc(unlockName(u))).join(', ')}</b></p>` : ''}
-${def.notions.length ? `<h4>À retenir</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); if (!f) return ''; return `<article class="ncard"><b>📘 ${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small" data-f="${id}">${coursOf(id).length ? 'Relire la fiche et le cours' : 'Relire la fiche'}</button></article>`; }).join('')}</div>` : ''}
-${TEACH[cs.id] ? `<p class="warnbox">⚠️ Reste attentif : une panne liée à ce que tu viens d'installer va bientôt arriver. Elle s'ouvrira en ticket.</p>` : ''}
-${newChap ? `<p class="infobox">🏁 Chapitre ${def.chap} terminé ! Prochain chapitre : <b>${esc(newChap.name)}</b>. ${esc(newChap.desc)}</p>` : next ? `<p class="muted">Prochain contrat : <b>${esc(next.client)}</b>.</p>` : ''}
+${def.unlock.length ? `<p>Débloqué : <b>${def.unlock.map(u => esc(unlockName(u))).join(', ')}</b></p>` : ''}
+${def.notions.length ? `<h4>À retenir</h4><div class="ncards">${def.notions.map(id => { const f = FICHE(id); if (!f) return ''; return `<article class="ncard"><b>${esc(f.title)}</b><p>${esc(f.retenir)}</p><button class="btn small" data-f="${id}">${coursOf(id).length ? 'Relire la fiche et le cours' : 'Relire la fiche'}</button></article>`; }).join('')}</div>` : ''}
+${TEACH[cs.id] ? `<p class="warnbox">Reste attentif : une panne liée à ce que tu viens d'installer va bientôt arriver. Elle s'ouvrira en ticket.</p>` : ''}
+${newChap ? `<p class="infobox">Chapitre ${def.chap} terminé ! Prochain chapitre : <b>${esc(newChap.name)}</b>. ${esc(newChap.desc)}</p>` : next ? `<p class="muted">Prochain contrat : <b>${esc(next.client)}</b>.</p>` : ''}
 <div class="btnrow"><button class="btn primary big" data-close>Continuer</button></div>`;
   modal(def.mission ? `Mission réussie : ${def.client}` : `Contrat livré : ${def.client}`, s, m => m.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => openFiches(b.dataset.f))));
 }
@@ -389,7 +396,7 @@ function equipDev(d) {
   const c = CAT[d.type], k = c.kind;
   let s = `<article class="card"><header><div><div class="eyebrow">${esc(c.name)} · baie ${rackName(d.rack)}, U${d.u}${c.u > 1 ? '–' + (d.u + c.u - 1) : ''}</div><h3>${esc(nameOf(d))}</h3></div>`;
   s += c.psu ? (D.powered[d.id] ? pill(devAlarm(d) ? 'warn' : 'ok', devAlarm(d) ? 'Alarme' : 'Sous tension') : pill('bad', d.thermalOff ? 'Arrêt thermique' : 'Hors tension')) : pill('offer', 'Passif');
-  s += `</header><p class="muted">${esc(c.desc || '')}</p>`;
+  s += `</header>${devThumb(d.type)}<p class="muted">${esc(c.desc || '')}</p>`;
   if (c.psu) s += `<div class="kv"><span>Consommation</span><b>${live(() => Math.round(D.draw[d.id] || 0) + ' W')}</b><span>Charge</span><b>${live(() => Math.round((D.util[d.id] || 0) * 100) + ' %')}</b></div>`;
   s += `<div class="btnrow">`;
   if (k !== 'blank' && k !== 'cm') s += `<button class="btn primary" data-act="win" data-id="${d.id}" title="Ou double-clic sur l'équipement">Ouvrir la fenêtre</button>`;
@@ -465,28 +472,28 @@ function equipPort(d, pid, part) {
   let s = crumb(d, pid) + `<article class="card"><header><div><div class="eyebrow">${portTypeName(p.t)} · ${speedName(p.speed)}${p.role ? ' · ' + p.role : ''}</div><h3>${esc(pid)}</h3></div>`;
   s += kc && kc.err ? pill('bad', 'err-disabled') : kc && !kc.admin ? pill('down', 'shutdown') : c ? (L.up ? pill(L.dmg || L.mismatch ? 'warn' : 'ok', L.dmg ? 'Erreurs CRC' : L.mismatch ? 'Duplex incohérent' : 'Lien actif') : pill('bad', 'Lien coupé')) : pill('off', 'Libre');
   s += `</header>`;
-  if (UI.from && UI.from.d === d.id && UI.from.p === pid) s += `<p class="infobox">Mode câblage : clique maintenant un second port libre du même type dans la baie (il brille), ou choisis-le ici.</p>`;
+  if (UI.from && UI.from.d === d.id && UI.from.p === pid) s += `<p class="infobox">Mode câblage : clique maintenant un second port libre compatible dans la baie (il brille), ou choisis-le ici.</p>`;
   if (c) {
     const o = otherEnd(c, d.id, pid);
     s += `<div class="kv"><span>Câble</span><b><button class="link" data-act="selcable" data-id="${c.id}">${esc(CABLES[c.type].name)}, ${fmtLen(c.len)}</button></b><span>Relié à</span><b><button class="link" data-act="selport" data-id="${o.d}" data-p="${esc(o.p)}">${esc(nameOf(dev(o.d)) + ' ' + o.p)}</button></b><span>Débit</span><b>${L.up ? speedName(L.speed) : '—'}</b><span>Trafic</span><b>${live(() => speedName(Math.round(D.cUse[c.id] || 0)))}</b></div>`;
     if (!L.up) s += `<p class="warnbox">Couche 1 : ${esc(L.why)}.</p>`;
   } else {
     const cands = [];
-    for (const x of Object.values(S.devs)) for (const q of CAT[x.type].ports) if (q.t === p.t && !portCable(x.id, q.id) && !(x.id === d.id && q.id === pid) && kindOf(x) !== 'rogue') cands.push({ d: x.id, p: q.id, n: nameOf(x) + ' ' + q.id });
+    for (const x of Object.values(S.devs)) for (const q of CAT[x.type].ports) if (plugType(x, q) === plugType(d, p) && !portCable(x.id, q.id) && !(x.id === d.id && q.id === pid) && kindOf(x) !== 'rogue') cands.push({ d: x.id, p: q.id, n: nameOf(x) + ' ' + q.id });
     s += `<label class="fld">Câbler vers <select data-act="cableto" data-id="${d.id}" data-p="${esc(pid)}"><option value="">Choisir un port libre…</option>${cands.map(x => `<option value="${x.d}|${esc(x.p)}">${esc(x.n)}</option>`).join('')}</select></label>`;
   }
   if (p.t !== 'rj45' && !p.op) {
-    const m = d.mods[pid];
-    s += `<h4>Module</h4><p class="muted">${m ? `${MODULES[m].std[p.t]} (${MODULES[m].long})${d.modFail[pid] ? ' : <b class="bad">défaillant</b>' : ''}` : c && CABLES[c.type].noModule ? 'Occupé par un DAC (modules intégrés).' : 'Cage vide.'}</p><div class="btnrow">`;
-    if (!c || !CABLES[c.type].noModule) {
-      if (!m) for (const k of ['SR', 'LR']) if (k === 'LR' || unlocked('om4')) s += `<button class="btn small" data-act="mod" data-id="${d.id}" data-p="${esc(pid)}" data-m="${k}">Insérer ${k} (${money(MODULES[k].price[p.t])})</button>`;
-      if (m) s += `<button class="btn small ${d.modFail[pid] ? 'primary' : ''}" data-act="modrep" data-id="${d.id}" data-p="${esc(pid)}">Remplacer le module</button>${!c ? `<button class="btn small" data-act="mod" data-id="${d.id}" data-p="${esc(pid)}" data-m="">Retirer</button>` : ''}`;
+    const m = d.mods[pid], dac = c && CABLES[c.type].noModule;
+    s += `<h4>Module</h4><p class="muted">${m ? `${MODULES[m].norm[p.t]} · ${MODULES[m].std[p.t]} (${MODULES[m].long})${d.modFail[pid] ? ' : <b class="bad">défaillant</b>' : ''}` : dac ? 'Occupé par un DAC (modules intégrés).' : 'Cage vide. Une fibre demande un module ; un DAC ou rien du tout, non.'}</p><div class="btnrow">`;
+    if (!dac) {
+      if (!m) for (const k of modsFor(p.t)) if (unlocked(MODULES[k].unlock)) s += `<button class="btn small" data-act="mod" data-id="${d.id}" data-p="${esc(pid)}" data-m="${k}" title="${MODULES[k].norm[p.t]} · ${esc(MODULES[k].long)}">Insérer ${k} (${money(MODULES[k].price[p.t])})</button>`;
+      if (m) s += `<button class="btn small ${d.modFail[pid] ? 'primary' : ''}" data-act="modrep" data-id="${d.id}" data-p="${esc(pid)}">Remplacer le module</button>${!c ? `<button class="btn small" data-act="mod" data-id="${d.id}" data-p="${esc(pid)}" data-m="">Retirer${d.modFail[pid] ? '' : ' (remboursé)'}</button>` : ''}`;
     }
     s += `</div>`;
   }
   if (c) s += `<div class="btnrow"><button class="btn" data-act="cablerep" data-id="${c.id}">Remplacer le câble</button><button class="btn danger" data-act="unplugc" data-id="${c.id}">Débrancher</button></div>`;
   s += `</article>`;
-  if (part === 'phys') return s + (kc ? `<button class="btn primary" data-act="cfgport" data-id="${d.id}" data-p="${esc(pid)}">⚙️ Configurer ce port (VLAN, mode…)</button>` : '');
+  if (part === 'phys') return s + (kc ? `<button class="btn primary" data-act="cfgport" data-id="${d.id}" data-p="${esc(pid)}">Configurer ce port (VLAN, mode…)</button>` : '');
   return s + equipPortCfg(d, pid) + cliBox(d);
 }
 // Réglages d'un port de switch ou de pare-feu
@@ -630,7 +637,7 @@ function ruleCard() {
   const zones = ['Internet', 'DMZ', 'SERVEURS', 'ADMIN', 'STOCKAGE', 'any'];
   let s = `<article class="card rulecard"><h4>Matrice de flux du pare-feu</h4><p class="muted">Politique par défaut : tout refuser. Chaque ligne autorise un flux ; les réponses reviennent seules (pare-feu avec état).</p>`;
   s += `<table class="ptable rules"><thead><tr><th>Source</th><th>Destination</th><th>Port</th><th></th></tr></thead><tbody>`;
-  S.rules.forEach((r, i) => { const risk = ruleRisk(r); s += `<tr class="${risk ? 'risky' : ''}"><td>${r.src}</td><td>${r.dst}</td><td class="mono">${r.proto.toUpperCase()} ${r.port}</td><td><button class="link" data-act="delrule" data-i="${i}" aria-label="Supprimer la règle">Suppr.</button></td></tr>${risk ? `<tr class="risky"><td colspan="4">⚠ ${esc(risk)}</td></tr>` : ''}`; });
+  S.rules.forEach((r, i) => { const risk = ruleRisk(r); s += `<tr class="${risk ? 'risky' : ''}"><td>${r.src}</td><td>${r.dst}</td><td class="mono">${r.proto.toUpperCase()} ${r.port}</td><td><button class="link" data-act="delrule" data-i="${i}" aria-label="Supprimer la règle">Suppr.</button></td></tr>${risk ? `<tr class="risky"><td colspan="4">${esc(risk)}</td></tr>` : ''}`; });
   if (!S.rules.length) s += `<tr><td colspan="4" class="muted">Aucune règle : tout est refusé.</td></tr>`;
   s += `</tbody></table><div class="ruleform"><label class="fld">Source <select class="r-src">${zones.map(z => `<option ${dr.src === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Destination <select class="r-dst">${zones.map(z => `<option ${dr.dst === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Protocole <select class="r-proto">${['tcp', 'udp', 'any'].map(z => `<option ${dr.proto === z ? 'selected' : ''}>${z}</option>`).join('')}</select></label><label class="fld">Port <input class="r-port" type="text" value="${esc(dr.port)}" inputmode="numeric" placeholder="443 ou any"></label></div><button class="btn primary" data-act="addrule">Ajouter la règle</button>`;
   return s + `<p class="muted mono nftprev">${esc(nftLine({ src: dr.src, dst: dr.dst, proto: dr.proto, port: dr.port === 'any' ? 'any' : +dr.port || dr.port }))}</p></article>`;
@@ -728,9 +735,9 @@ function openCableModal(a, b) {
   let s = `<p><b>${esc(nameOf(da))} ${esc(a.p)}</b> ↔ <b>${esc(nameOf(db))} ${esc(b.p)}</b></p><p class="muted">Distance mesurée : ${fmtLen(len)} (${da.rack === db.rack ? 'dans la baie, par le guide-câbles latéral' : 'entre baies, par le chemin de câbles au-dessus'}), soit un cordon standard de ${fmtLen(stdLen(len))}.</p><fieldset class="cablelist"><legend>Type de câble</legend>`;
   for (const c of checks) {
     const ct = CABLES[c.type];
-    s += `<label class="copt ${c.ok ? '' : 'no'}"><input type="radio" name="ctype" value="${c.type}" ${c.ok ? '' : 'disabled'} ${best && best.type === c.type ? 'checked' : ''}><i class="sw" style="background:${ct.color}"></i><span><b>${esc(ct.name)}</b>${c.ok ? ` · ${money(c.cost)}${c.mods.length ? ` (dont ${c.mods.length} module${c.mods.length > 1 ? 's' : ''} ${ct.module})` : ''}` : ''}<small>${c.ok ? `${ct.std} · ${speedName(c.speed)}` : esc(c.why)}</small></span></label>`;
+    s += `<label class="copt ${c.ok ? '' : 'no'}"><input type="radio" name="ctype" value="${c.type}" ${c.ok ? '' : 'disabled'} ${best && best.type === c.type ? 'checked' : ''}><i class="sw" style="background:${ct.color}"></i><span><b>${esc(ct.name)}</b>${c.ok ? ` · ${money(c.cost)}` : ''}<small>${c.ok ? `${ct.std} · ${speedName(c.speed)}` : esc(c.why)}</small></span></label>`;
   }
-  s += `</fieldset><p class="note">Dans une baie, un DAC suffit entre cages SFP+. Entre baies éloignées, la fibre multimode OM4 avec des modules SR. Vers les opérateurs, de la monomode OS2 avec des modules LR.</p><div class="btnrow"><button class="btn primary" id="cgo" ${best ? '' : 'disabled'}>Poser le câble</button><button class="btn" data-close>Annuler</button></div>`;
+  s += `</fieldset><p class="note">Dans une baie, un DAC suffit entre cages SFP+ : il n'a pas besoin de module. Une fibre, elle, demande un module dans chaque cage, le même aux deux bouts : insère-le d'abord, dans l'onglet Physique de l'équipement. Multimode OM4 avec SR ou SX dans la salle, monomode OS2 avec LR vers les opérateurs.</p><div class="btnrow"><button class="btn primary" id="cgo" ${best ? '' : 'disabled'}>Poser le câble</button><button class="btn" data-close>Annuler</button></div>`;
   modal('Poser un câble', s, m => {
     m.querySelector('#cgo').addEventListener('click', () => {
       const t = m.querySelector('input[name=ctype]:checked'); if (!t) return;
@@ -794,9 +801,9 @@ function openFiches(id) {
     s += `<nav class="flist">${groups.map(([n, l]) => `<div class="fgrp lv${n}"><h5><i class="lv lv${n}"></i>${NIV_NAME[n]} <small>${l.length} fiches</small></h5>${l.map(item).join('')}</div>`).join('')}</nav></aside>`;
     s += `<section class="fbody"><div class="eyebrow">Fiche du jeu · <span class="tag lv${ficheRank(f.id)[0]}">${NIV_NAME[ficheRank(f.id)[0]]}</span> <span class="tag">${'★'.repeat(4 - ficheRank(f.id)[1])} ${PRIO_NAME[ficheRank(f.id)[1]]}</span></div><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p>`;
     if (notes.length) {
-      s += `<nav class="ctoc"><b>📗 Note${notes.length > 1 ? 's' : ''} de cours complète${notes.length > 1 ? 's' : ''} :</b> ${notes.map((n, i) => `<a href="#cours-${i}" data-goto="${i}">${esc(n.title)}</a>`).join(' · ')}</nav>`;
-      s += notes.map((n, i) => `<article class="cours" id="cours-${i}"><div class="eyebrow">📗 Note de cours · vault cours-sisr-main</div><h3>${esc(n.title)}</h3>${noteHtml(n)}</article>`).join('');
-    } else s += `<p class="infobox">📗 Ton cours (vault cours-sisr-main) n'a pas de note sur ce sujet, propre au datacenter : cette fiche du jeu en tient lieu.</p>`;
+      s += `<nav class="ctoc"><b>Note${notes.length > 1 ? 's' : ''} de cours complète${notes.length > 1 ? 's' : ''} :</b> ${notes.map((n, i) => `<a href="#cours-${i}" data-goto="${i}">${esc(n.title)}</a>`).join(' · ')}</nav>`;
+      s += notes.map((n, i) => `<article class="cours" id="cours-${i}"><div class="eyebrow">Note de cours · vault cours-sisr-main</div><h3>${esc(n.title)}</h3>${noteHtml(n)}</article>`).join('');
+    } else s += `<p class="infobox">Ton cours (vault cours-sisr-main) n'a pas de note sur ce sujet, propre au datacenter : cette fiche du jeu en tient lieu.</p>`;
     return s + `</section></div>`;
   };
   modal('Fiches de cours', render(f0), m => {
@@ -875,16 +882,16 @@ function openRecette(cs) {
 }
 function openHelp(first) {
   const s = `<p class="lead">Tu reprends une salle de datacenter vide. Des clients signent des contrats : tu installes le matériel, tu câbles, tu configures et tu testes. Chaque contrat t'apprend une notion du BTS SIO SISR, des plus simples aux plus avancées.</p>
-<ol class="howto"><li><b>🎯 Lis ton contrat</b> dans le panneau de droite : il donne les étapes, une par une.</li><li><b>👉 Clique « Montrer »</b> : le jeu t'amène au bon endroit.</li><li><b>📘 Ouvre la fiche</b> de chaque notion (« Pourquoi ? ») : le résumé du jeu, puis ta note de cours complète.</li></ol>
-<div class="two help"><div><h4>🏢 Dans la salle</h4><ul><li>Marche avec les <b>flèches</b> ou <b>ZQSD</b>, ou clique sur le sol.</li><li>Clique un <b>emplacement libre</b> pour poser une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les opérateurs arrivent en <b>salle MMR</b> (à gauche), l'électricité dans le <b>local</b> à droite.</li></ul></div>
-<div><h4>🗄️ Dans une baie</h4><ul><li><b>F</b> : face avant (disques) ou arrière (ports et prises). PDU A en rouge, B en bleu.</li><li><b>Double-clic</b> sur un équipement : sa fenêtre avec les onglets Physique, Config, CLI et Aide.</li><li>Clique un <b>port libre</b>, puis un second : tu poses un câble.</li></ul></div></div>
+<ol class="howto"><li><b>Lis ton contrat</b> dans le panneau de droite : il donne les étapes, une par une.</li><li><b>Clique « Montrer »</b> : le jeu t'amène au bon endroit.</li><li><b>Ouvre la fiche</b> de chaque notion (« Pourquoi ? ») : le résumé du jeu, puis ta note de cours complète.</li></ol>
+<div class="two help"><div><h4>Dans la salle</h4><ul><li><b>Glisse</b> pour déplacer la vue, <b>molette</b> pour zoomer.</li><li>Clique un <b>emplacement libre</b> pour poser une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les opérateurs arrivent en <b>salle MMR</b> (à gauche), l'électricité dans le <b>local</b> à droite.</li></ul></div>
+<div><h4>Dans une baie</h4><ul><li><b>F</b> : face avant (disques) ou arrière (ports et prises). PDU A en rouge, B en bleu.</li><li><b>Double-clic</b> sur un équipement : sa fenêtre avec les onglets Physique, Config, CLI et Aide.</li><li>Clique un <b>port libre</b>, puis un second : tu poses un câble.</li></ul></div></div>
 <p class="note">Échap annule ou revient à la salle · F tourne la baie · Espace met en pause.</p>
-<div class="btnrow">${first ? '<button class="btn primary big" id="hGo">🚀 Commencer : ta première baie</button>' : ''}<button class="btn" id="hFiche">📚 Fiches de cours</button><button class="btn" data-close>Fermer</button>${first ? '' : '<button class="btn danger" id="hReset">Nouvelle partie</button>'}</div>`;
+<div class="btnrow">${first ? '<button class="btn primary big" id="hGo">Commencer : ta première baie</button>' : ''}<button class="btn" id="hFiche">Fiches de cours</button><button class="btn" data-close>Fermer</button>${first ? '' : '<button class="btn danger" id="hReset">Nouvelle partie</button>'}</div>`;
   modal(first ? 'Bienvenue dans ton datacenter' : 'Aide', s, m => {
     const go = m.querySelector('#hGo'); if (go) go.addEventListener('click', () => { actAccept('c1'); UI.tab = 'contracts'; closeModal(); derive(); renderAll(); const cs = S.contracts.find(c => c.id === 'c1'); if (cs) openBriefing(cs); });
     m.querySelector('#hFiche').addEventListener('click', () => openFiches('baie'));
     const rs = m.querySelector('#hReset');
-    if (rs) { let armed = false; rs.addEventListener('click', () => { if (!armed) { armed = true; rs.textContent = 'Confirmer : tout effacer ?'; return; } newState(); UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.ctOpen = {}; UI.av = { x: 1.4, y: 15.6, a: -Math.PI / 2 }; WINS.length = 0; closeModal(); derive(); renderAll(); openHelp(true); }); }
+    if (rs) { let armed = false; rs.addEventListener('click', () => { if (!armed) { armed = true; rs.textContent = 'Confirmer : tout effacer ?'; return; } newState(); UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.ctOpen = {}; WINS.length = 0; closeModal(); derive(); renderAll(); openHelp(true); }); }
   }, true);
 }
 
@@ -956,9 +963,8 @@ onContractActive = function (cs, def) { _onContract(cs, def); toast(`${def.missi
 function openRack(r) {
   if (!S.racks[r] || S.racks[r].kind === 'inrow') return;
   if (UI.mode !== 'rack' || UI.rack !== r) { UI.vb = null; UI.place = null; }
-  UI.mode = 'rack'; UI.rack = r; UI.path = null; UI.arrive = null;
+  UI.mode = 'rack'; UI.rack = r;
   if (!UI.sel || !UI.sel.d || dev(UI.sel.d) && dev(UI.sel.d).rack !== r) UI.sel = null;
-  const fp = frontPoint(r); UI.av.x = fp.x; UI.av.y = fp.y;
   renderAll();
 }
 function backToRoom() { UI.mode = 'room'; UI.place = null; if (UI.sel && UI.sel.t !== 'rack') UI.sel = UI.rack != null ? { t: 'rack', r: UI.rack } : null; renderAll(); }
@@ -1012,21 +1018,14 @@ function zoomAt(fx, fy, f) {
   v.x += (v.w - nw) * fx; v.y += (v.h - nh) * fy; v.w = nw; v.h = nh; applyVB(svg);
 }
 function roomClick(e, el) {
-  const pt = svgPoint(e);
-  if (!el) { walkTo(pt); renderView(svg); return; }
+  if (!el) return;
   const k = el.dataset.k, ds = el.dataset;
-  if (k === 'aisle') { walkTo(pt); UI.sel = { t: 'aisle', id: ds.id }; renderView(svg); if (UI.tab === 'equip') renderSide(); return; }
-  if (k === 'rk') {
-    const r = +ds.r, fp = frontPoint(r);
-    UI.sel = { t: 'rack', r }; UI.tab = 'equip';
-    if (Math.hypot(UI.av.x - fp.x, UI.av.y - fp.y) < 1.3) openRack(r);
-    else { walkTo(fp, () => openRack(r)); renderAll(); }
-    return;
-  }
-  if (k === 'inrow') { const r = +ds.r; walkTo(frontPoint(r)); select({ t: 'rack', r }); return; }
-  if (k === 'eslot') { const row = ds.row, pos = +ds.pos; walkTo(frontOf(row, pos)); select({ t: 'slot', row, pos }); return; }
-  if (k === 'crac' || k === 'cracslot') { const slot = +ds.slot, p = CRAC_SLOTS[slot]; walkTo({ x: p.x + CRAC_W / 2, y: p.y < 8 ? p.y + CRAC_H + 0.4 : p.y - 0.4 }); select({ t: k, slot }); return; }
-  if (k === 'infra') { const b = INFRA[ds.id]; walkTo({ x: b.x - 0.4, y: b.y + b.h / 2 }); select({ t: 'infra', id: ds.id }); return; }
+  if (k === 'aisle') { UI.sel = { t: 'aisle', id: ds.id }; renderView(svg); if (UI.tab === 'equip') renderSide(); return; }
+  if (k === 'rk') { const r = +ds.r; UI.sel = { t: 'rack', r }; UI.tab = 'equip'; openRack(r); return; }
+  if (k === 'inrow') { select({ t: 'rack', r: +ds.r }); return; }
+  if (k === 'eslot') { select({ t: 'slot', row: ds.row, pos: +ds.pos }); return; }
+  if (k === 'crac' || k === 'cracslot') { select({ t: k, slot: +ds.slot }); return; }
+  if (k === 'infra') { select({ t: 'infra', id: ds.id }); return; }
 }
 /* ---------- Fenêtres d'équipement (double-clic) : onglets Physique, Config, CLI, Aide ---------- */
 const WINS = [];
@@ -1041,14 +1040,14 @@ const KIND_GUIDE = {
   fw: ["Le port côté Internet va vers le routeur, le port LAN vers le switch.", "Onglet Config : le port LAN passe en trunk avec les VLAN à router.", "La matrice de flux autorise uniquement les flux du contrat : tout le reste est refusé."],
   server: ["Branche ses deux alimentations : une sur le PDU A, l'autre sur le PDU B.", "Relie une carte réseau au switch (onglet Physique, clic sur un port).", "Onglet Config : choisis le RAID, puis déploie les VM depuis le contrat."],
   nas: ["Branche ses alimentations sur A et B, puis relie-le au switch.", "Ajoute des disques en face avant et choisis un niveau RAID.", "Les VM peuvent y stocker leurs disques (VLAN 30 STOCKAGE)."],
-  odf: ["L'ODF reçoit les fibres des opérateurs (OP1, OP2).", "Relie OP1 au routeur avec une fibre monomode (OS2) et des modules LR.", "Sans ce lien, la salle n'a pas d'accès Internet."],
+  odf: ["L'ODF reçoit les fibres des opérateurs (OP1, OP2).", "Insère un module LR dans une cage WAN du routeur, puis relie-la à OP1 avec une fibre monomode (OS2).", "Sans ce lien, la salle n'a pas d'accès Internet."],
 };
 function winKind(w) { return w.spec.d ? kindOf(dev(w.spec.d)) : null; }
 function winTabsOf(w) {
-  if (!w.spec.d) return [['phys', '🔌 Physique'], ['aide', '📘 Aide']];
+  if (!w.spec.d) return [['phys', 'Physique'], ['aide', 'Aide']];
   const k = winKind(w);
-  if (['cm', 'blank', 'rogue', 'odf'].includes(k)) return [['phys', '🔌 Physique'], ['aide', '📘 Aide']];
-  return [['phys', '🔌 Physique'], ['cfg', '⚙️ Config'], ['cli', '⌨️ CLI'], ['aide', '📘 Aide']];
+  if (['cm', 'blank', 'rogue', 'odf'].includes(k)) return [['phys', 'Physique'], ['aide', 'Aide']];
+  return [['phys', 'Physique'], ['cfg', 'Config'], ['cli', 'CLI'], ['aide', 'Aide']];
 }
 function openWin(spec) {
   const key = spec.d ? 'd:' + spec.d : spec.infra ? 'i:' + spec.infra : 'c:' + spec.crac;
@@ -1095,15 +1094,15 @@ function winPhys(w, d) {
   const c = CAT[d.type], k = c.kind;
   let s = `<article class="card"><header><div><div class="eyebrow">${esc(c.name)} · U${d.u}${c.u > 1 ? '–' + (d.u + c.u - 1) : ''}</div><h3>${esc(nameOf(d))}</h3></div>`;
   s += c.psu ? (D.powered[d.id] ? pill(devAlarm(d) ? 'warn' : 'ok', devAlarm(d) ? 'Alarme' : 'Sous tension') : pill('bad', d.thermalOff ? 'Arrêt thermique' : 'Hors tension')) : pill('offer', 'Passif');
-  s += `</header><p class="muted">${esc(c.desc || '')}</p>`;
+  s += `</header>${devThumb(d.type)}<p class="muted">${esc(c.desc || '')}</p>`;
   if (c.psu) s += `<div class="kv"><span>Consommation</span><b>${live(() => Math.round(D.draw[d.id] || 0) + ' W')}</b><span>Charge</span><b>${live(() => Math.round((D.util[d.id] || 0) * 100) + ' %')}</b></div>`;
   s += `<div class="btnrow">`;
-  if (c.psu && k !== 'rogue') s += `<button class="btn" data-act="power" data-id="${d.id}">${d.on ? '⏻ Éteindre' : '⏻ Allumer'}</button>`;
+  if (c.psu && k !== 'rogue') s += `<button class="btn" data-act="power" data-id="${d.id}">${d.on ? 'Éteindre' : 'Allumer'}</button>`;
   if (!c.fixed && k !== 'rogue') s += `<button class="btn" data-act="move" data-id="${d.id}">Déplacer</button>`;
   if (!c.fixed) s += `<button class="btn danger" data-act="remove" data-id="${d.id}">${k === 'rogue' ? 'Débrancher et retirer' : 'Retirer'}</button>`;
   s += `</div></article>`;
   if (c.psu && k !== 'rogue') {
-    s += `<article class="card"><h4>🔌 Alimentations</h4><ul class="plist">`;
+    s += `<article class="card"><h4>Alimentations</h4><ul class="plist">`;
     d.psus.forEach((p, i) => {
       const lv = p.out && pduLive(d.rack, p.out.pdu);
       s += `<li>${stDot(!p.ok ? 'bad' : lv ? 'ok' : 'down')} <b>PSU${i + 1}</b> <span class="muted">${!p.ok ? 'en panne' : p.out ? `PDU ${p.out.pdu}, prise ${p.out.i + 1}${lv ? '' : ' (sans courant)'}` : 'non branchée'}</span>
@@ -1115,10 +1114,11 @@ function winPhys(w, d) {
     if (d.psus.length === 1) s += `<p class="note">Une seule alimentation : c'est un point unique de panne.</p>`;
     s += `</article>`;
   }
-  if (k === 'server' || k === 'nas') s += `<article class="card"><h4>💽 Disques (face avant)</h4><div class="bays">${d.disks.map((x, i) => `<button class="baybtn ${x ? x.st : 'empty'}" data-act="seldisk" data-id="${d.id}" data-bay="${i}" title="Baie ${i}">${i}<small>${x ? (x.type === 'ssd' ? 'SSD' : 'HDD') : '+'}</small></button>`).join('')}</div><p class="muted">Clique une baie pour ajouter ou remplacer un disque. Le RAID se règle dans l'onglet Config.</p></article>`;
-  if (k === 'router') s += `<article class="card"><h4>🌐 Opérateurs</h4><div class="kv"><span>Accès Internet</span><b>${live(() => D.inet.ok ? `${D.inet.ops} lien(s), ${speedName(D.inet.cap)}` : 'coupé')}</b><span>Trafic Internet</span><b>${live(() => speedName(Math.round(D.inetUse || 0)))}</b></div>${D.inet.ok ? '' : `<p class="warnbox">${esc(D.inet.why)}</p>`}</article>`;
+  if (k === 'server' || k === 'nas') s += `<article class="card"><h4>Disques (face avant)</h4><div class="bays">${d.disks.map((x, i) => `<button class="baybtn ${x ? x.st : 'empty'}" data-act="seldisk" data-id="${d.id}" data-bay="${i}" title="Baie ${i}">${i}<small>${x ? (x.type === 'ssd' ? 'SSD' : 'HDD') : '+'}</small></button>`).join('')}</div><p class="muted">Clique une baie pour ajouter ou remplacer un disque. Le RAID se règle dans l'onglet Config.</p></article>`;
+  if (k === 'router') s += `<article class="card"><h4>Opérateurs</h4><div class="kv"><span>Accès Internet</span><b>${live(() => D.inet.ok ? `${D.inet.ops} lien(s), ${speedName(D.inet.cap)}` : 'coupé')}</b><span>Trafic Internet</span><b>${live(() => speedName(Math.round(D.inetUse || 0)))}</b></div>${D.inet.ok ? '' : `<p class="warnbox">${esc(D.inet.why)}</p>`}</article>`;
+  s += winModules(w, d);
   if (c.ports.length) {
-    s += `<article class="card"><h4>🔗 Ports et câbles</h4><p class="muted">Clique un port pour le câbler ou voir son câble.</p><table class="ptable"><thead><tr><th>Port</th><th>Lien</th><th>Relié à</th></tr></thead><tbody>`;
+    s += `<article class="card"><h4>Ports et câbles</h4><p class="muted">Clique un port pour le câbler ou voir son câble.</p><table class="ptable"><thead><tr><th>Port</th><th>Lien</th><th>Relié à</th></tr></thead><tbody>`;
     for (const p of c.ports) {
       const cb = portCable(d.id, p.id), L = cb && D.link[cb.id], kc = hasCfg(d, p) ? cfg(d, p.id) : null;
       const st = kc && kc.err ? ['bad', 'err-disabled'] : kc && !kc.admin ? ['down', 'éteint'] : cb ? (L.up ? (L.dmg || L.mismatch ? ['warn', 'erreurs'] : ['ok', 'actif']) : ['down', 'coupé']) : ['off', 'libre'];
@@ -1128,6 +1128,28 @@ function winPhys(w, d) {
     s += `</tbody></table></article>`;
   }
   return s;
+}
+
+// Carte « Modules » : la liste des modules à gauche, les cages de l'équipement à droite (comme dans Packet Tracer)
+function winModules(w, d) {
+  const cages = CAT[d.type].ports.filter(p => p.t !== 'rj45' && !p.op);
+  if (!cages.length) return '';
+  const fmts = [...new Set(cages.map(p => p.t))];
+  const list = Object.keys(MODULES).filter(k => fmts.some(t => MODULES[k].price[t] != null));
+  if (w.modPick && (!list.includes(w.modPick) || !unlocked(MODULES[w.modPick].unlock))) w.modPick = null;
+  let s = `<article class="card modcard"><h4>Modules</h4><p class="muted">Choisis un module dans la liste, puis clique une cage vide pour l'y insérer. Un clic sur une cage occupée retire son module : s'il marche, il retourne en stock et il est remboursé.</p><div class="modgrid"><div class="modlist">`;
+  for (const k of list) {
+    const M = MODULES[k], ok = unlocked(M.unlock);
+    s += `<button class="modopt ${w.modPick === k ? 'on' : ''}" data-act="modpick" data-m="${k}" aria-pressed="${w.modPick === k}" ${ok ? '' : 'disabled'}><i class="modsw" style="background:${M.tab}"></i><span><b>${k}</b> <span class="mono">${fmts.filter(t => M.norm[t]).map(t => M.norm[t]).join(' / ')}</span><small>${esc(M.long)} · ${M.reach}</small><small>${ok ? fmts.filter(t => M.price[t] != null).map(t => `${fmts.length > 1 ? (t === 'qsfp' ? 'QSFP+ ' : 'SFP+ ') : ''}${money(M.price[t])}`).join(' · ') : 'Arrive avec la fibre multimode OM4'}</small></span></button>`;
+  }
+  s += `</div><div class="cagelist">`;
+  for (const p of cages) {
+    const m = d.mods[p.id], cab = portCable(d.id, p.id), dac = cab && CABLES[cab.type].noModule, fail = !!d.modFail[p.id];
+    const fits = !m && !dac && w.modPick && MODULES[w.modPick].price[p.t] != null;
+    const tip = dac ? 'Occupée par un DAC' : m ? (fail ? 'Module en panne : clique pour le remplacer' : cab ? 'Câblée : débranche le câble pour retirer le module' : 'Clique pour retirer le module') : fits ? `Clique pour insérer le module ${w.modPick}` : 'Cage vide';
+    s += `<button class="cagebtn ${m ? 'full' : ''} ${fail ? 'fail' : ''} ${fits ? 'cand' : ''}" data-act="modcage" data-id="${d.id}" data-p="${esc(p.id)}" title="${tip}"><b>${esc(p.id)}</b><small>${dac ? 'DAC' : m ? m + (fail ? ' · panne' : '') : 'vide'}</small></button>`;
+  }
+  return s + `</div></div></article>`;
 }
 
 /* ----- Onglet Config : ce qui se règle sur l'équipement ----- */
@@ -1214,7 +1236,7 @@ function routerCfg(w, d) {
   }
   // lignes d'accès à distance
   const v = vtyOf(d), stds = names.filter(isStd);
-  s += `<article class="card"><h4>🔐 Accès à distance (lignes VTY)</h4><p class="muted">Les administrateurs ouvrent une session sur le routeur par les lignes VTY 0 à 4. Telnet circule en clair : on n'accepte que SSH, et seulement depuis le réseau ADMIN (10.99.0.0/24) grâce à une ACL standard.</p>`
+  s += `<article class="card"><h4>Accès à distance (lignes VTY)</h4><p class="muted">Les administrateurs ouvrent une session sur le routeur par les lignes VTY 0 à 4. Telnet circule en clair : on n'accepte que SSH, et seulement depuis le réseau ADMIN (10.99.0.0/24) grâce à une ACL standard.</p>`
     + `<label class="fld">Protocoles acceptés (transport input) <select data-act="vty" data-id="${d.id}" data-f="transport">${[['all', 'telnet et ssh (déconseillé)'], ['ssh', 'ssh seulement (chiffré)'], ['telnet', 'telnet seulement (en clair)']].map(o => `<option value="${o[0]}" ${v.transport === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select></label>`
     + `<label class="fld">ACL des lignes (access-class … in) <select data-act="vty" data-id="${d.id}" data-f="acl"><option value="">aucune : tout le monde peut tenter</option>${stds.map(n => `<option value="${n}" ${v.acl === n ? 'selected' : ''}>ACL standard ${n}</option>`).join('')}</select></label>`
     + (stds.length ? '' : `<p class="note">Il faut d'abord une ACL standard (1 à 99). <button class="link" data-act="aclnewstd" data-id="${d.id}">Créer l'ACL standard 10</button></p>`) + `</article>`;
@@ -1225,7 +1247,7 @@ function routerCfg(w, d) {
 function aclTester(d, L, std) {
   const P = std ? vtyPkts() : aclPkts(wanOp(d, 'Te0/0/0') || 1);
   const bad = P.filter(k => aclEval(L, k).act !== k.want).length;
-  let s = `<article class="card"><h4>🧪 Tester des paquets</h4><p class="muted">${std ? "Qui essaie d'ouvrir une session sur le routeur ? Une ACL standard ne regarde que la source." : "Paquets types qui arrivent d'Internet."} Pour chacun : la ligne qui décide, et ce qu'il faudrait. ${bad ? `<b>${bad} à corriger.</b>` : '<b>Tout est bon.</b>'}</p><ul class="plist pkts">`;
+  let s = `<article class="card"><h4>Tester des paquets</h4><p class="muted">${std ? "Qui essaie d'ouvrir une session sur le routeur ? Une ACL standard ne regarde que la source." : "Paquets types qui arrivent d'Internet."} Pour chacun : la ligne qui décide, et ce qu'il faudrait. ${bad ? `<b>${bad} à corriger.</b>` : '<b>Tout est bon.</b>'}</p><ul class="plist pkts">`;
   for (const k of P) {
     const r = aclEval(L, k), good = r.act === k.want;
     s += `<li>${stDot(good ? 'ok' : 'bad')} <span><b>${esc(k.name)}</b><small class="mono">${std ? `source ${k.src}` : `${k.proto.toUpperCase()} ${k.src} → ${k.dst} port ${k.port}`}</small><small>${r.act === 'permit' ? 'Autorisé' : 'Refusé'} ${r.i < 0 ? 'par le deny implicite' : `par la ligne ${r.e.seq}`}${good ? ' ✓' : ` · il faudrait ${k.want === 'permit' ? "l'autoriser" : 'le refuser'}`}</small></span></li>`;
@@ -1274,9 +1296,9 @@ function winAide(w) {
   const ids = w.spec.d ? (KIND_FICHES[k] || ['baie']) : w.spec.infra ? (INFRA_FICHES[w.spec.infra] || ['onduleur']) : ['froid', 'salle'];
   const f = FICHE(ids[Math.min(w.fiche, ids.length - 1)]) || FICHES[0];
   let s = '';
-  if (KIND_GUIDE[k]) s += `<article class="card guide"><h4>🧭 Comment s'en servir</h4><ol class="steps">${KIND_GUIDE[k].map(t => `<li><span>${esc(t)}</span></li>`).join('')}</ol></article>`;
-  s += `<div class="chips">${ids.map((id, i) => `<button class="chipc ${FICHE(id) === f ? 'on' : ''}" data-act="wfiche" data-i="${i}">📘 ${esc(FICHE(id).title)}</button>`).join('')}</div>`;
-  s += `<article class="card fbody"><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p><button class="btn primary" data-act="fiche" data-id="${f.id}">${coursOf(f.id).length ? '📗 Ouvrir la fiche et la note de cours' : 'Ouvrir la fiche complète'}</button></article>`;
+  if (KIND_GUIDE[k]) s += `<article class="card guide"><h4>Comment s'en servir</h4><ol class="steps">${KIND_GUIDE[k].map(t => `<li><span>${esc(t)}</span></li>`).join('')}</ol></article>`;
+  s += `<div class="chips">${ids.map((id, i) => `<button class="chipc ${FICHE(id) === f ? 'on' : ''}" data-act="wfiche" data-i="${i}">${esc(FICHE(id).title)}</button>`).join('')}</div>`;
+  s += `<article class="card fbody"><h3>${esc(f.title)}</h3>${f.html}<p class="retenir"><b>À retenir.</b> ${esc(f.retenir)}</p><button class="btn primary" data-act="fiche" data-id="${f.id}">${coursOf(f.id).length ? 'Ouvrir la fiche et la note de cours' : 'Ouvrir la fiche complète'}</button></article>`;
   return s;
 }
 
@@ -1402,6 +1424,16 @@ function panelClick(e) {
   if (wb) {
     const w = WINS.find(x => x.id === wb.dataset.win);
     if (w && a === 'cfgport') { w.tab = 'cfg'; w.cfgPort = b.dataset.p; renderWins(true); return; }
+    if (w && a === 'modpick') { w.modPick = w.modPick === b.dataset.m ? null : b.dataset.m; renderWins(true); return; }
+    if (w && a === 'modcage') {
+      const d = dev(id), pid = b.dataset.p, m = d.mods[pid], cab = portCable(d.id, pid);
+      if (cab && CABLES[cab.type].noModule) toast("Cette cage est occupée par un DAC : il a ses modules intégrés.", 'info');
+      else if (m && d.modFail[pid]) act(() => actReplaceModule(d, pid));
+      else if (m) { const r = act(() => actModule(d, pid, null)); if (typeof r !== 'string') toast(`Module ${m} retiré de ${pid} : ${money(MODULES[m].price[portDef(d, pid).t])} remboursés.`, 'info'); }
+      else if (!w.modPick) toast("Choisis d'abord un module dans la liste.", 'info');
+      else { const k = w.modPick, r = act(() => actModule(d, pid, k)); if (typeof r !== 'string') toast(`Module ${k} inséré dans ${pid}.`, 'good'); }
+      renderWins(true); return;
+    }
     if (w && a === 'wfiche') { w.fiche = +b.dataset.i; renderWins(true); return; }
     if (w && a === 'wchip') { w.draft = b.dataset.cmd; renderWins(true); const i = document.querySelector(`#${w.id} .wcli input`); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } return; }
     if (w && a === 'aclsel') { w.acl = b.dataset.n; w.aclDraft = null; renderWins(true); return; }
@@ -1562,17 +1594,13 @@ $('#backRoom').addEventListener('click', backToRoom);
 $('#rPrev').addEventListener('click', () => { const n = rackNeighbors(UI.rack).prev; if (n >= 0) openRack(n); });
 $('#rNext').addEventListener('click', () => { const n = rackNeighbors(UI.rack).next; if (n >= 0) openRack(n); });
 document.querySelectorAll('[data-layer]').forEach(b => b.addEventListener('click', () => { UI.layer = b.dataset.layer; if (UI.layer === 'chaleur' && !S.flags.sawHeat) { S.flags.sawHeat = true; touch(); derive(); } renderAll(); }));
-const KEYS = new Set();
-window.addEventListener('keyup', e => KEYS.delete(e.code));
-window.addEventListener('blur', () => KEYS.clear());
 $('#btnShop').addEventListener('click', () => openShop());
 $('#btnFiches').addEventListener('click', () => openFiches(UI.sel && UI.sel.t === 'disk' ? 'raid' : 'baie'));
 $('#btnHelp').addEventListener('click', () => openHelp(false));
 window.addEventListener('keydown', e => {
   if (e.target.closest('input, textarea, select')) { if (e.key === 'Escape') e.target.blur(); return; }
-  if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (WINS.length && e.target.closest('.win')) closeWin(e.target.closest('.win').id); else if (UI.place || UI.from) { UI.place = null; UI.from = null; renderAll(); } else if (!$('#console').hidden) $('#console').hidden = true; else if (UI.mode === 'rack') backToRoom(); else { UI.sel = null; UI.path = null; renderAll(); } }
+  if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (WINS.length && e.target.closest('.win')) closeWin(e.target.closest('.win').id); else if (UI.place || UI.from) { UI.place = null; UI.from = null; renderAll(); } else if (!$('#console').hidden) $('#console').hidden = true; else if (UI.mode === 'rack') backToRoom(); else { UI.sel = null; renderAll(); } }
   else if (!$('#modal').hidden) return;
-  else if (UI.mode === 'room' && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) { e.preventDefault(); KEYS.add(e.code); }
   else if ((e.key === 'f' || e.key === 'F') && UI.mode === 'rack') { UI.face = UI.face === 'front' ? 'rear' : 'front'; renderAll(); }
   else if (e.key === ' ') { e.preventDefault(); S.speed = S.speed ? 0 : 1; renderTop(); }
   else if (e.key === '+') zoomAt(0.5, 0.5, 0.8);
@@ -1608,8 +1636,6 @@ function frame(now) {
   let steps = 0, changed = false;
   while (acc >= 1 && steps < 40) { simStep(1); acc -= 1; steps++; changed = true; }
   if (D.dirty) { derive(); changed = true; }
-  if (UI.mode === 'room') { if (moveAvatar(dt, KEYS)) placeAvatar(); }
-  else if (KEYS.size) KEYS.clear();
   viewT += dt; sideT += dt; liveT += dt; saveT += dt;
   if (viewT > (changed ? 0.5 : 1.2)) { viewT = 0; renderView(svg); renderTop(); }
   if (liveT > 0.4) { liveT = 0; updateLive(); }

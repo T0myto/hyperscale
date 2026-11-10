@@ -79,7 +79,6 @@ function actConnect(type, a, b) {
   const chk = cableCheck(type, a, b);
   if (!chk.ok) return chk.why;
   const e = pay(chk.cost, 'le câble'); if (e) return e;
-  for (const m of chk.mods) dev(m.d).mods[m.p] = CABLES[type].module;
   const c = addCable(type, a, b);
   c.len = chk.L;
   logEvent(`${CABLES[type].name} de ${fmtLen(chk.L)} posé : ${nameOf(dev(a.d))} ${a.p} ↔ ${nameOf(dev(b.d))} ${b.p}.`);
@@ -104,12 +103,22 @@ function actReplaceCable(cid) {
 function actModule(d, pid, m) {
   const pd = portDef(d, pid);
   if (pd.op) return "Ce module appartient à l'opérateur.";
-  const cab = portCable(d.id, pid);
-  if (cab && CABLES[cab.type].noModule && m) return "Un DAC occupe déjà la cage : il a ses modules intégrés.";
-  if (m) { const e = pay(MODULES[m].price[pd.t], 'le module'); if (e) return e; }
+  if (pd.t === 'rj45') return "Une prise RJ45 n'a pas de cage : aucun module à y insérer.";
+  const cab = portCable(d.id, pid), cur = d.mods[pid];
+  if (cab && CABLES[cab.type].noModule) return "Un DAC occupe cette cage : il a ses modules intégrés.";
+  if (cab) return "Débranche d'abord le câble de cette cage.";
+  if (m === cur) return null;
+  if (m) {
+    const M = MODULES[m];
+    if (!M || M.price[pd.t] == null) return `Le module ${m} n'existe pas pour une ${portTypeName(pd.t)}.`;
+    if (!unlocked(M.unlock)) return "Ce module n'est pas encore au catalogue : livre d'autres contrats.";
+    const e = pay(M.price[pd.t], 'le module'); if (e) return e;
+  }
+  // un module sain retiré retourne en stock : il est remboursé
+  if (cur && !d.modFail[pid]) S.money += MODULES[cur].price[pd.t];
   if (m) d.mods[pid] = m; else delete d.mods[pid];
   delete d.modFail[pid];
-  cli(d, [m ? `! insertion d'un module ${MODULES[m].std[pd.t]} dans ${pid}` : `! module retiré de ${pid}`]);
+  cli(d, [m ? `! insertion d'un module ${MODULES[m].std[pd.t]} (${MODULES[m].norm[pd.t]}) dans ${pid}` : `! module retiré de ${pid}`]);
   touch(); return null;
 }
 function actReplaceModule(d, pid) {

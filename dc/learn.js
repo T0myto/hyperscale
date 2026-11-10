@@ -35,9 +35,13 @@ const FICHES = [
 <tr><td>OM3 / OM4 multimode</td><td>Turquoise</td><td>300 / 400 m</td><td>Dans le bâtiment, la salle</td></tr>
 <tr><td>OS2 monomode</td><td>Jaune</td><td>10 km et plus</td><td>Entre bâtiments, opérateurs</td></tr></table>
 <table><tr><th>Module</th><th>Débit</th><th>Fibre</th></tr>
+<tr><td>SFP SX</td><td>1 Gbit/s</td><td>Multimode</td></tr>
+<tr><td>SFP LX</td><td>1 Gbit/s</td><td>Monomode</td></tr>
 <tr><td>SFP+ SR</td><td>10 Gbit/s</td><td>Multimode</td></tr>
 <tr><td>SFP+ LR</td><td>10 Gbit/s</td><td>Monomode</td></tr>
+<tr><td>SFP+ T</td><td>10 Gbit/s, 30 m</td><td>Cuivre RJ45 (pas de fibre)</td></tr>
 <tr><td>QSFP+ SR4 / LR4</td><td>40 Gbit/s</td><td>Multimode / monomode</td></tr></table>
+<p><b>Dans le jeu</b> : une cage vide ne sert à rien pour une fibre. Ouvre la fenêtre de l'équipement, onglet Physique, carte Modules : choisis un module, clique une cage. Mets le même module aux deux bouts, puis tire la fibre. Un DAC, lui, a ses modules intégrés.</p>
 <p><b>Les 3 erreurs classiques</b> : deux modules différents sur un même lien (SR d'un côté, LR de l'autre) ; un module LR sur de la multimode ; émission et réception inversées. Vérifier avec <code>show interfaces transceiver</code> : une puissance reçue vers −40 dBm veut dire « plus de lumière ».</p>
 <p>Ne regarde jamais l'extrémité d'une fibre active : le laser est invisible et dangereux pour l'œil.</p>`,
     retenir: "Multimode OM4 (turquoise) dans la salle avec des modules SR. Monomode OS2 (jaune) vers les opérateurs avec des modules LR. Même module aux deux bouts." },
