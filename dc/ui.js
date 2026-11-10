@@ -694,10 +694,12 @@ function openShop(focus) {
   for (const k of SHOP_ORDER) {
     const c = CAT[k], ok = unlocked(c.unlock || (DEFAULT_UNLOCKED.includes(k) ? null : k));
     const locked = !ok;
-    s += `<article class="item ${focus === k ? 'focus' : ''} ${locked ? 'locked' : ''}"><div class="ihead"><b>${esc(c.name)}</b><span>${money(c.cost)}</span></div><p class="muted">${c.u}U · ${c.psu ? c.psu + ' alim. · ' + c.w[0] + '–' + c.w[1] + ' W' : 'passif'}</p><p>${esc(c.desc)}</p>${locked ? `<p class="lock">Débloqué par un prochain contrat.</p>` : `<div class="qtyrow" data-item="${k}"><div class="qty" role="group" aria-label="Quantité"><button class="btn small" data-q="-1" aria-label="Une unité de moins" ${inRack ? '' : 'disabled'}>−</button><output>1</output><button class="btn small" data-q="1" aria-label="Une unité de plus" ${inRack ? '' : 'disabled'}>+</button></div><span class="qtot">${money(c.cost)}</span></div>
+    s += `<article class="item ${focus === k ? 'focus' : ''} ${locked ? 'locked' : ''}"><div class="ipic">${catThumb(k)}</div><div class="ihead"><b>${esc(c.name)}</b><span>${money(c.cost)}</span></div><p class="muted">${c.u}U · ${c.psu ? c.psu + ' alim. · ' + c.w[0] + '–' + c.w[1] + ' W' : 'passif'}</p><p>${esc(c.desc)}</p>${locked ? `<p class="lock">Débloqué par un prochain contrat.</p>` : `<div class="qtyrow" data-item="${k}"><div class="qty" role="group" aria-label="Quantité"><button class="btn small" data-q="-1" aria-label="Une unité de moins" ${inRack ? '' : 'disabled'}>−</button><output>1</output><button class="btn small" data-q="1" aria-label="Une unité de plus" ${inRack ? '' : 'disabled'}>+</button></div><span class="qtot">${money(c.cost)}</span></div>
 <div class="btnrow"><button class="btn primary" data-buy="${k}" ${S.money < c.cost || !inRack ? 'disabled' : ''}>Placer à la main</button><button class="btn" data-auto="${k}" ${S.money < c.cost || !inRack ? 'disabled' : ''} title="Installe dans les premières unités libres, du haut vers le bas">Installer d'office</button></div>`}</article>`;
   }
   s += `</div>`;
+  // matières (métal, grilles) utilisées par les images, au cas où la baie n'est pas affichée
+  s = `<svg width="0" height="0" style="position:absolute" aria-hidden="true">${DEFS}</svg>` + s;
   modal('Catalogue', s, m => {
     const qtyOf = k => +m.querySelector(`.qtyrow[data-item="${k}"] output`).textContent;
     const freeSlots = k => { const h = CAT[k].u; let n = 0; const map = slotMap(UI.rack); for (let u = RACK_U - h + 1; u >= 1; u--) { let ok = true; for (let i = 0; i < h; i++) if (map[u + i]) ok = false; if (ok) { n++; for (let i = 0; i < h; i++) map[u + i] = 'x'; } } return n; };

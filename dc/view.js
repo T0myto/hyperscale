@@ -212,6 +212,18 @@ function frontSVG(d) {
   if (selD) s += `<rect x="${x - 4}" y="${y - 1}" width="${w + 8}" height="${h + 2}" rx="2" class="dsel"/>`;
   return s + '</g>';
 }
+// Image du catalogue : la façade d'un exemplaire neuf, dessinée comme dans la baie
+function catThumb(type) {
+  const c = CAT[type], h = c.u * U_PX;
+  const d = { id: '_cat_' + type, type, rack: 0, u: 1, host: '', psus: Array.from({ length: c.psu }, () => ({ ok: true, out: null })), mods: {}, modFail: {}, disks: [], cfg: {} };
+  if (c.kind === 'server') d.disks = Array.from({ length: c.bays }, (_, i) => i < 2 ? { type: 'ssd', st: 'ok', rb: 0 } : null);
+  if (c.kind === 'nas') d.disks = Array.from({ length: c.bays }, (_, i) => i < 4 ? { type: i < 2 ? 'ssd' : 'hdd', st: 'ok', rb: 0 } : null);
+  const o = devOrigin(d), sel = UI.sel; UI.sel = null;
+  // le matériel réseau se reconnaît à ses ports, en face arrière ; les serveurs à leurs disques, en face avant
+  const g = (['switch', 'router', 'fw'].includes(c.kind) ? rearSVG(d) : frontSVG(d)).replace(/ data-k="[^"]*"/g, '');
+  UI.sel = sel;
+  return `<svg class="ithumb" viewBox="${o.x - 6} ${o.y - 2} ${W19 + 12} ${h + 3}" role="img" aria-label="Façade : ${esc(c.name)}">${g}</svg>`;
+}
 function rearSVG(d) {
   const c = CAT[d.type], k = c.kind, o = devOrigin(d), x = o.x, y = o.y, h = (c.u || 1) * U_PX - 1;
   const selD = UI.sel && UI.sel.t === 'dev' && UI.sel.d === d.id;
