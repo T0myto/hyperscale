@@ -51,13 +51,15 @@ function cli(d, lines) {
 /* ---------- Création ---------- */
 function newState() {
   S = {
-    v: 5, money: ECO.start, t: 8 * 60, xp: 0, racks: [], devs: {}, cables: [], vms: [], rules: [], contracts: [], tickets: [],
+    v: 6, money: ECO.start, t: 8 * 60, xp: 0, racks: [], devs: {}, cables: [], vms: [], rules: [], contracts: [], tickets: [],
     codex: { seen: {}, quiz: {} }, unlocked: [...DEFAULT_UNLOCKED], feeds: { A: true, B: true },
     power: { edf: true, batt: 15, battMax: 15, gen: false, genRun: false, genT: 0, ups: { A: { kw: 20, trip: false }, B: { kw: 20, trip: false } }, rows: { A: true } },
     cool: { cracs: [{ slot: 0, ok: true }], contain: {} },
     room: { op2: false }, fwopt: { syn: false, scrub: false, block: [] },
     seq: { d: 0, c: 0, v: 0, t: 0, h: {}, s: {} }, syslog: [], events: [], cli: [], flags: {}, timers: {},
     nextInc: 8 * 60 + 200, teach: [], speed: 1, done: 0,
+    // le PC portable du technicien : câble console, câble réseau, carte réseau
+    pc: { con: null, eth: null, dhcp: true, ip: '', mask: '255.255.255.0', gw: '' },
   };
   addRack('MMR', 0, 'mmr');
   addDevice('odf', 0, 21);
@@ -379,7 +381,7 @@ const CHK = {
   unusedOff: () => {
     let n = 0;
     for (const sw of devsOfKind('switch')) for (const p of CAT[sw.type].ports) {
-      if (p.role === 'mgmt' || portCable(sw.id, p.id)) continue;
+      if (p.role === 'mgmt' || portCable(sw.id, p.id) || (S.pc && S.pc.eth && S.pc.eth.d === sw.id && S.pc.eth.p === p.id)) continue; // le port du portable sert
       n++; if (cfg(sw, p.id).admin) return false;
     }
     return n > 0;
@@ -935,4 +937,5 @@ function simStep(dt) {
   D.rate = rev; D.cost = 0;
   S.money += rev * dt / 60;
   if (typeof incidentTick === 'function') incidentTick(dt);
+  if (typeof osTick === 'function') osTick();
 }

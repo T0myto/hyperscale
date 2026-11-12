@@ -11,7 +11,7 @@ La partie est sauvegardée toute seule dans le navigateur (`localStorage`). Le b
 
 ## Progression
 
-18 contrats en 4 chapitres. Les notions arrivent **par facilité, puis par priorité** : d'abord le plus facile, et à difficulté égale le plus important pour le BTS SIO SISR. L'urbanisation de la salle est la première notion. Une **mission** se valide dès que ses objectifs sont atteints ; un **contrat client** se livre par une recette (tests d'acceptation).
+26 exercices et contrats en 4 chapitres. Les notions arrivent **par facilité, puis par priorité** : d'abord le plus facile, et à difficulté égale le plus important pour le BTS SIO SISR. L'urbanisation de la salle est la première notion. Une **mission** se valide dès que ses objectifs sont atteints ; un **contrat client** se livre par une recette (tests d'acceptation).
 
 | Chapitre | Contrats | Notions, dans l'ordre |
 |---|---|---|
@@ -28,7 +28,10 @@ La partie est sauvegardée toute seule dans le navigateur (`localStorage`). Le b
 
 - **Salle** de 6 rangées (A à F) avec allées, salle opérateurs (MMR), énergie (EDF, TGBT, onduleurs A/B, batteries, groupe électrogène) et froid (CRAC, in-row, confinement).
 - **Baie** en vue avant et arrière : routeur, pare-feu, switchs d'accès, leaf et spine, serveurs, baies de stockage, câbles cuivre, fibre et DAC.
-- **Fenêtre de chaque équipement** (double-clic), avec quatre onglets :
+- **PC portable** (bouton Portable) : c'est le seul endroit où l'on configure. PuTTY ouvre une session en **console** (câble branché sur l'appareil) ou en **SSH** (adresse IP, compte, mot de passe). S'y ajoutent une invite de commandes (`ping`, `ipconfig`, `tracert`), la carte réseau du portable et un navigateur.
+- **Tout se tape, rien ne se clique** : Cisco IOS sur les switchs et le routeur (modes `>`, `#`, `(config)#`, aide `?`, abréviations, `write memory` sinon la configuration est perdue au redémarrage), vraies commandes Linux sur le pare-feu (`nft`, `ip link`), les serveurs et le stockage (`mdadm`, `qm`, `ip addr`).
+- **Parcours guidé** : chaque exercice débloque la suite (portable, invite de commandes, SSH, navigateur). Ce qui n'est pas encore débloqué reste visible, grisé, avec le nom de l'exercice qui l'ouvre.
+- **Fenêtre de chaque équipement** (double-clic), pour le matériel seulement (les lignes ci-dessous décrivent l'ancienne version à quatre onglets ; il reste Physique, État en lecture seule, et Aide) :
   - **Physique** : alimentations, ports, câbles et disques ;
   - **Config** : ports et VLAN, RAID et VM, matrice de flux du pare-feu, ACL et lignes VTY du routeur, avec un testeur de paquets ;
   - **CLI** : vraies commandes Cisco IOS (`conf t`, `interface range`, `switchport`, `access-list`, `ip access-group`, `line vty`…) ;
@@ -60,6 +63,8 @@ La partie est sauvegardée toute seule dans le navigateur (`localStorage`). Le b
 | `dc/room.js` | Vue de la salle (sol, allées, rangées, énergie, froid) |
 | `dc/ui.js` | Panneaux, guide des contrats, fenêtres à onglets, sauvegarde, boucle de jeu |
 | `dc/audio.js` | Sons d'interface (Web Audio, aucun fichier son) |
+| `dc/os.js` | Systèmes des appareils : modes IOS, comptes, SSH, configuration de démarrage, commandes Linux, réseau du portable |
+| `dc/laptop.js` | Fenêtre du PC portable, panneaux en lecture seule |
 | `sw.js` | Service worker : copie hors ligne du jeu, le réseau d'abord |
 | `manifest.webmanifest`, `icon.svg`, `icon-*.png` | Fiche et icônes de l'application installable |
 
@@ -74,6 +79,11 @@ Régénère `index.html` après une modification de `hyperscale.html`.
 node tools/test.js
 ```
 Lance les tests automatiques des règles du jeu (données, modules et câbles, réseau, trois jours de simulation, sauvegarde), sans navigateur. À relancer après chaque modification de `dc/`.
+
+```bash
+node tools/test-cli.js
+```
+Joue le parcours au clavier, comme un joueur : console, SSH, VLAN, RAID, machines virtuelles, pare-feu, durcissement.
 
 ```bash
 node tools/gen-icons.js

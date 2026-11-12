@@ -424,11 +424,15 @@ function vmCmd(v, c) {
    ========================================================= */
 const CLIM = {};
 let CLI_SELF = false;
-function cliState(d) { return CLIM[d.id] || (CLIM[d.id] = { mode: 'exec', ifs: [], acl: null }); }
+function cliState(d) { return CLIM[d.id] || (CLIM[d.id] = { mode: 'user', ifs: [], acl: null }); }
 const isIOS = d => ['switch', 'router'].includes(kindOf(d));
 function cliPrompt(d) {
   const st = cliState(d);
-  if (!isIOS(d) || st.mode === 'exec') return promptOf({ d: d.id });
+  if (!isIOS(d)) return promptOf({ d: d.id });
+  if (st.mode === 'user') return `${d.host}>`;
+  if (st.mode === 'exec') return `${d.host}#`;
+  if (st.mode === 'vlan') return `${d.host}(config-vlan)#`;
+  if (st.mode === 'if' && st.svi) return `${d.host}(config-if)#`;
   if (st.mode === 'config') return `${d.host}(config)#`;
   if (st.mode === 'acl') return `${d.host}(config-ext-nacl)#`;
   if (st.mode === 'line') return `${d.host}(config-line)#`;
@@ -533,7 +537,7 @@ function cliHelp(d) {
   return runCommand({ d: d.id }, 'help') + (isIOS(d) ? '\nPour configurer : « configure terminal » (abrégé « conf t »).' : '');
 }
 // Exécute une ligne et renvoie le texte à afficher. Les réglages passent par les mêmes actions que les formulaires.
-function cliRun(d, input) {
+function cliCore(d, input) {
   const raw = input.trim().replace(/\s+/g, ' ');
   if (!raw) return '';
   const low = raw.toLowerCase(), st = cliState(d);

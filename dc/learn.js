@@ -256,6 +256,73 @@ interface Te0/0/0
 <tr><td>Service NodePort</td><td>Publie une application sur un port de 30000 à 32767 de chaque nœud</td></tr></table>
 <p>Pour survivre à la perte d'une baie, on répartit les nœuds sur <b>plusieurs baies</b>, et un répartiteur de charge en DMZ envoie le trafic vers les NodePorts.</p>`,
     retenir: "Conteneur = application + dépendances. Kubernetes répartit les pods sur des nœuds. API sur 6443 pour l'admin, NodePort de 30000 à 32767. Nœuds répartis sur plusieurs baies." },
+  { id: 'console', title: 'Le PC portable, la console et PuTTY', html: `
+<p>Un technicien réseau ne règle rien avec la souris : il ouvre un <b>terminal</b> sur l'équipement. Deux chemins y mènent.</p>
+<table><tr><th>Accès</th><th>Par où</th><th>Quand</th></tr>
+<tr><td><b>Console</b> (série)</td><td>Un câble du portable au port console de l'équipement</td><td>Équipement neuf, réseau en panne, mot de passe perdu : marche toujours</td></tr>
+<tr><td><b>SSH</b></td><td>Le réseau, vers l'adresse IP de l'équipement</td><td>Au quotidien, à distance, une fois l'adresse et le SSH en place</td></tr></table>
+<p><b>PuTTY</b> est le logiciel qui ouvre ces sessions. En console : type <code>Serial</code>, ligne <code>COM1</code>, vitesse <code>9600</code>. En SSH : l'adresse IP et le port <code>22</code>.</p>
+<p>Un équipement sorti du carton n'a pas d'adresse IP : la <b>première configuration se fait toujours en console</b>.</p>
+<p><b>Dans le jeu</b> : le bouton Portable ouvre ton PC. Le câble console se branche dans la fenêtre de l'appareil, onglet Physique.</p>`,
+    retenir: "Console = câble série, marche sans réseau, sert à la première configuration. SSH = par le réseau, chiffré, port 22. PuTTY ouvre les deux." },
+  { id: 'ios', title: 'Les modes de Cisco IOS', html: `
+<p>Sur un switch ou un routeur Cisco, l'<b>invite</b> dit dans quel mode on est, donc ce qu'on a le droit de faire.</p>
+<table><tr><th>Invite</th><th>Mode</th><th>On y entre avec</th><th>On y fait</th></tr>
+<tr><td><code>Switch&gt;</code></td><td>utilisateur</td><td>la connexion</td><td>regarder, sans plus</td></tr>
+<tr><td><code>Switch#</code></td><td>privilégié</td><td><code>enable</code></td><td>tout afficher (<code>show</code>), enregistrer, redémarrer</td></tr>
+<tr><td><code>Switch(config)#</code></td><td>configuration globale</td><td><code>configure terminal</code></td><td>régler l'équipement entier</td></tr>
+<tr><td><code>Switch(config-if)#</code></td><td>interface</td><td><code>interface Gi1/0/1</code></td><td>régler un port</td></tr>
+<tr><td><code>Switch(config-line)#</code></td><td>ligne</td><td><code>line vty 0 4</code></td><td>régler les accès console et distants</td></tr></table>
+<p><code>exit</code> remonte d'un mode, <code>end</code> revient d'un coup au mode privilégié. <code>?</code> liste ce qu'on peut taper ; les commandes s'abrègent (<code>sh run</code>, <code>conf t</code>, <code>int gi1/0/1</code>).</p>
+<p><b>Deux configurations.</b> La <code>running-config</code> est en mémoire vive : elle s'applique tout de suite et <b>disparaît au redémarrage</b>. La <code>startup-config</code> est celle qui est relue au démarrage. <code>write memory</code> (ou <code>copy running-config startup-config</code>) copie la première dans la seconde.</p>`,
+    retenir: "> regarder, # tout voir, (config)# régler. exit remonte, end revient à #. ? aide. write memory, sinon tout est perdu au redémarrage." },
+  { id: 'ssh', title: 'SSH : administrer à distance', html: `
+<p><b>Telnet</b> envoie tout en clair, mots de passe compris : n'importe qui sur le chemin peut les lire. <b>SSH</b> chiffre toute la session. On n'utilise que SSH.</p>
+<p>Sur un équipement Cisco, il faut cinq choses pour que SSH réponde :</p>
+<table><tr><th>Étape</th><th>Commande</th></tr>
+<tr><td>Une adresse IP</td><td><code>interface vlan 99</code> puis <code>ip address 10.99.0.2 255.255.255.0</code></td></tr>
+<tr><td>Un nom de domaine</td><td><code>ip domain-name salle.lan</code></td></tr>
+<tr><td>Des clés</td><td><code>crypto key generate rsa</code></td></tr>
+<tr><td>Un compte</td><td><code>username admin secret …</code></td></tr>
+<tr><td>Les lignes distantes</td><td><code>line vty 0 4</code>, <code>login local</code>, <code>transport input ssh</code></td></tr></table>
+<p><code>enable secret</code> protège le passage en mode privilégié. « secret » stocke une empreinte du mot de passe, « password » le garde lisible : on préfère <b>secret</b>.</p>
+<p>Sur un serveur Linux, le service <code>sshd</code> écoute sur le port 22 ; le compte a besoin d'un mot de passe (<code>passwd</code>) ou, mieux, d'une clé.</p>`,
+    retenir: "SSH chiffre, Telnet non. Cisco : adresse IP, domaine, clés RSA, compte local, line vty avec login local et transport input ssh. Port 22." },
+  { id: 'linux', title: 'Administrer un serveur Linux au clavier', html: `
+<p>Un serveur n'a ni écran ni souris. Tout passe par le <b>shell</b>, en console ou en SSH. L'invite <code>root@srv:~#</code> dit qui on est (root, l'administrateur) et sur quelle machine.</p>
+<table><tr><th>Besoin</th><th>Commande</th></tr>
+<tr><td>Voir les cartes réseau et leurs adresses</td><td><code>ip -br a</code></td></tr>
+<tr><td>Donner une adresse</td><td><code>ip addr add 10.99.0.21/24 dev eno1</code></td></tr>
+<tr><td>État des disques en RAID</td><td><code>cat /proc/mdstat</code></td></tr>
+<tr><td>Créer une grappe RAID</td><td><code>mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sda /dev/sdb</code></td></tr>
+<tr><td>Lister les machines virtuelles (Proxmox)</td><td><code>qm list</code></td></tr>
+<tr><td>Créer une machine virtuelle</td><td><code>qm create 101 --name web-01 --net0 virtio,bridge=vmbr0,tag=10 --ipconfig0 ip=172.16.10.11/24</code></td></tr>
+<tr><td>Relancer un service</td><td><code>systemctl restart nginx</code></td></tr>
+<tr><td>Lire les journaux</td><td><code>journalctl -n 15</code></td></tr></table>
+<p><code>/24</code> est la notation courte du masque 255.255.255.0. <code>tag=10</code> range la carte de la VM dans le VLAN 10.</p>
+<p><b>Dans le jeu</b> : <code>help</code> liste les commandes de l'équipement où tu es connecté.</p>`,
+    retenir: "ip -br a pour voir, ip addr add pour régler. mdadm crée le RAID, qm gère les VM, systemctl les services, journalctl les journaux." },
+  { id: 'routage', title: 'Router entre les VLAN', html: `
+<p>Un VLAN est un réseau à part : deux machines de VLAN différents <b>ne se voient pas</b>, même sur le même switch. Pour passer de l'un à l'autre, il faut un <b>routeur</b>.</p>
+<p>Chaque machine connaît une <b>passerelle par défaut</b> : l'adresse du routeur dans son propre réseau. Tout ce qui n'est pas dans son réseau, elle l'envoie à la passerelle.</p>
+<table><tr><th>VLAN</th><th>Réseau</th><th>Passerelle</th></tr>
+<tr><td>10 DMZ</td><td>172.16.10.0/24</td><td>172.16.10.1</td></tr>
+<tr><td>20 SERVEURS</td><td>10.20.0.0/24</td><td>10.20.0.1</td></tr>
+<tr><td>99 ADMIN</td><td>10.99.0.0/24</td><td>10.99.0.1</td></tr></table>
+<p><b>Routeur sur un bâton.</b> Un seul câble en trunk arrive sur le routeur ; il porte une <b>sous-interface</b> par VLAN (<code>port2.20</code>, <code>port2.99</code>), chacune avec l'adresse de passerelle. Dans la salle, c'est le pare-feu qui joue ce rôle : il route et il filtre.</p>
+<p><code>ping</code> dit si la destination répond. <code>tracert</code> (Windows) ou <code>traceroute</code> (Linux) montre chaque routeur traversé.</p>`,
+    retenir: "Pas de routeur, pas de passage entre VLAN. Passerelle = adresse du routeur dans mon réseau. Une sous-interface par VLAN sur un trunk. tracert montre le chemin." },
+  { id: 'durcir', title: 'Durcir un équipement réseau', html: `
+<p>Sorti du carton, un switch laisse entrer quiconque branche un câble console, et passer en mode privilégié sans rien demander. <b>Durcir</b>, c'est fermer ces portes une à une.</p>
+<table><tr><th>Porte</th><th>Fermeture</th></tr>
+<tr><td>Mode privilégié</td><td><code>enable secret …</code></td></tr>
+<tr><td>Port console</td><td><code>line console 0</code>, <code>password …</code>, <code>login</code></td></tr>
+<tr><td>Accès à distance</td><td>comptes locaux, <code>transport input ssh</code> : plus de Telnet</td></tr>
+<tr><td>Qui peut se connecter</td><td>une ACL sur les lignes : <code>access-class 10 in</code> (réseau ADMIN seulement)</td></tr>
+<tr><td>Ports inutilisés</td><td><code>shutdown</code>, et un VLAN sans issue</td></tr>
+<tr><td>Mots de passe lisibles</td><td><code>service password-encryption</code></td></tr></table>
+<p>Principe du <b>moindre privilège</b> : chacun n'a que l'accès dont il a besoin. Et on <b>enregistre</b> (<code>write memory</code>) : un durcissement perdu au redémarrage ne protège rien.</p>`,
+    retenir: "enable secret, mot de passe sur la console, SSH seulement, ACL sur les lignes VTY, ports inutilisés éteints, moindre privilège, write memory." },
 ];
 // Les fiches suivent l'ordre où les contrats les introduisent (la recette arrive avec le premier contrat client)
 (() => {
@@ -268,6 +335,7 @@ interface Te0/0/0
 // Priorité pour le BTS SIO SISR : 1 indispensable, 2 important, 3 approfondissement.
 // Le parcours suit cet ordre (facilité, puis priorité) autant que le jeu le permet : il faut une baie avant de câbler.
 const FICHE_RANK = {
+  console: [1, 1], ios: [1, 1], ssh: [1, 1], linux: [1, 1], routage: [2, 1], durcir: [2, 1],
   salle: [1, 2], baie: [1, 1], elec: [1, 1], cuivre: [1, 1], switch: [1, 1], ip: [1, 1], virtu: [1, 1], raid: [1, 1], ports: [1, 1],
   onduleur: [1, 2], froid: [1, 2], fibre: [1, 2], recette: [1, 2],
   pf: [2, 1], dep: [2, 1], tls: [2, 1], bak: [2, 1], sup: [2, 2], l2sec: [2, 2], attaques: [2, 2],
@@ -381,7 +449,7 @@ const INCIDENTS = {
     alert: x => `${nameOf(dev(x.d))} : late collisions en hausse sur ${x.p}`,
     cmd: x => `show interfaces ${x.p}`,
     target: x => x.d,
-    hints: x => ["Quelque chose a changé récemment ? Les journaux du switch le disent (%SYS-5-CONFIG_I).", `show interfaces ${x.p} : des late collisions = duplex différent de chaque côté.`, `Remets ${x.p} en speed auto / duplex auto (Équipement → port → Vitesse et duplex).`],
+    hints: x => ["Quelque chose a changé récemment ? Les journaux du switch le disent (%SYS-5-CONFIG_I).", `show interfaces ${x.p} : des late collisions = duplex différent de chaque côté.`, `Remets ${x.p} en automatique, au terminal du switch : interface ${x.p}, speed auto, duplex auto, end, write memory.`],
     quiz: () => quiz2(["Le duplex a été forcé d'un côté et laissé en automatique de l'autre", 'Le câble est sectionné', 'Le module SFP est mort', 'La passerelle est fausse'],
       ["Laisser l'auto-négociation des deux côtés, et tracer chaque changement de configuration", 'Forcer le half duplex partout', 'Désactiver les journaux', 'Utiliser le VLAN 1']),
   },
@@ -427,7 +495,7 @@ const INCIDENTS = {
     target: x => x.kind === 'vol' ? (D.inet.rtr || null) : (devsOfKind('fw')[0] || {}).id,
     hints: x => x.kind === 'vol'
       ? ["Les sites publics rament tous en même temps : regarde le lien Internet.", "Le routeur reçoit 25 Gbit/s sur un lien de 10 : c'est une attaque volumétrique, le tuyau est plein avant ton pare-feu.", "Pare-feu → Protection : demande le filtrage à l'opérateur (anti-DDoS en amont)."]
-      : ["Les sites publics rament : regarde l'état du pare-feu.", "Des milliers de connexions SYN jamais terminées remplissent la table du pare-feu.", "Pare-feu → Protection : active la limitation des SYN."],
+      : ["Les sites publics rament : regarde l'état du pare-feu.", "Des milliers de connexions SYN jamais terminées remplissent la table du pare-feu.", "Sur le pare-feu : nft add rule inet filtre input tcp flags syn limit rate over 200/second drop."],
     quiz: x => x.kind === 'vol'
       ? quiz2(["Une attaque DDoS volumétrique sature le lien opérateur", 'Un disque est en panne', 'Le DNS est faux', 'Un câble est abîmé'], ["Un service anti-DDoS chez l'opérateur, en amont du lien", 'Une règle de plus sur le pare-feu', 'Un câble Cat 6A', 'Un RAID 10'])
       : quiz2(["Un SYN flood remplit la table de sessions du pare-feu", 'Une voie électrique est tombée', 'Le certificat a expiré', 'Le trunk refuse le VLAN 10'], ["Limiter les SYN et activer les SYN cookies", 'Ouvrir tous les ports', 'Augmenter le RAID', 'Mettre le site en VLAN 1']),
@@ -456,7 +524,7 @@ const INCIDENTS = {
     alert: x => `Échecs d'authentification SSH en rafale sur ${(S.vms.find(k => k.id === x.vm) || {}).name}`,
     cmd: () => 'journalctl -u ssh -n 15',
     vmTarget: x => x.vm,
-    hints: x => ["Lis le journal SSH de la VM visée.", `Des centaines de « Failed password » depuis ${x.ip} : quelqu'un essaie des mots de passe.`, "Active fail2ban sur la VM, bloque l'adresse sur le pare-feu, et n'ouvre SSH depuis Internet que si c'est le service vendu (SFTP)."],
+    hints: x => ["Lis le journal SSH de la VM visée.", `Des centaines de « Failed password » depuis ${x.ip} : quelqu'un essaie des mots de passe.`, "Dans la VM : systemctl enable --now fail2ban. Sur le pare-feu : nft add element inet filtre blocklist { ADRESSE }. Et n'ouvre SSH depuis Internet que si c'est le service vendu (SFTP)."],
     quiz: () => quiz2(["Une attaque par force brute sur SSH exposé à Internet", 'Un module optique HS', 'Un PDU en surcharge', 'Un VLAN natif différent'],
       ["SSH réservé au réseau d'administration, authentification par clé et fail2ban", 'Un mot de passe plus court', 'Ouvrir SSH à tout Internet', 'Désactiver les journaux']),
   },
@@ -468,7 +536,7 @@ const INCIDENTS = {
     alert: x => `${(S.vms.find(k => k.id === x.vm) || {}).name} : modification massive de fichiers (extension .locked)`,
     cmd: () => 'ls /srv/data',
     vmTarget: x => x.vm,
-    hints: x => ["Le service est à terre et les fichiers ont changé d'extension : rançongiciel.", "Isole d'abord la VM (Équipement → la VM → Isoler) pour stopper la propagation. Ne paie pas.", "Restaure depuis la sauvegarde si elle existe. Sinon, il faut réinstaller et les données sont perdues."],
+    hints: x => ["Le service est à terre et les fichiers ont changé d'extension : rançongiciel.", "Isole d'abord la VM pour stopper la propagation : sur son hôte, qm set VMID --net0 virtio,bridge=vmbr0,tag=VLAN,link_down=1 (qm list donne le numéro). Ne paie pas.", "Restaure depuis la sauvegarde si elle existe : qmrestore VMID sur l'hôte. Sinon, il faut la refaire (qm destroy VMID, puis qm create) et les données sont perdues. Ensuite, rebranche sa carte : link_down=0."],
     quiz: () => quiz2(["Un rançongiciel a chiffré les fichiers de la VM", 'Un disque est plein', 'Un câble est abîmé', 'Le certificat a expiré'],
       ["Des sauvegardes 3-2-1 dont une hors ligne, testées, et le moindre privilège", 'Payer la rançon', 'Un RAID 1', 'Un snapshot sur le même stockage']),
   },
@@ -509,7 +577,7 @@ const INCIDENTS = {
     alert: x => `${(S.vms.find(k => k.id === x.vm) || {}).name} : le certificat TLS a expiré`,
     cmd: () => 'openssl s_client -connect localhost:443',
     vmTarget: x => x.vm,
-    hints: x => ["Les clients voient « Votre connexion n'est pas privée » : couche 7.", "openssl s_client affiche la date notAfter du certificat.", "Renouvelle le certificat (Équipement → la VM → Renouveler) et active le renouvellement automatique ACME."],
+    hints: x => ["Les clients voient « Votre connexion n'est pas privée » : couche 7.", "openssl s_client affiche la date notAfter du certificat.", "Dans la VM (qm terminal VMID sur l'hôte, ou SSH) : certbot renew, puis systemctl enable --now certbot.timer pour le renouvellement automatique (ACME)."],
     quiz: () => quiz2(['Le certificat TLS a dépassé sa date de fin de validité', 'Le lien est saturé', 'Le port 443 est fermé', 'Un disque est en panne'],
       ["Renouvellement automatique ACME et supervision de l'échéance", 'Désactiver HTTPS', 'Prendre un certificat de 30 ans', 'Mettre le site en VLAN 20']),
   },
@@ -521,7 +589,7 @@ const INCIDENTS = {
     alert: x => `${(S.vms.find(k => k.id === x.vm) || {}).name} : mémoire utilisée au-delà de 90 %`,
     cmd: () => 'free -h',
     vmTarget: x => x.vm,
-    hints: x => ["Le service consomme de plus en plus de mémoire puis tombe.", "free -h et journalctl -k montrent l'OOM killer : le noyau tue le processus le plus gourmand.", "Redémarre la VM pour repartir, et donne-lui plus de RAM si l'hôte en a."],
+    hints: x => ["Le service consomme de plus en plus de mémoire puis tombe.", "free -h et journalctl -k montrent l'OOM killer : le noyau tue le processus le plus gourmand.", "Sur l'hôte : qm reboot VMID pour repartir, et qm set VMID --memory le double si l'hôte a de la mémoire libre."],
     quiz: () => quiz2(['Une fuite mémoire a épuisé la RAM de la VM (OOM killer)', 'Un câble est abîmé', 'Le RAID est dégradé', 'Le pare-feu bloque'],
       ['Surveiller la mémoire, dimensionner la RAM et ne pas la surallouer', 'Surallouer la RAM', 'Désactiver le swap et les alertes', 'Mettre la VM en DMZ']),
   },
@@ -533,7 +601,7 @@ const INCIDENTS = {
     alert: x => `${(S.vms.find(k => k.id === x.vm) || {}).name} : /var à plus de 90 %`,
     cmd: () => 'df -h',
     vmTarget: x => x.vm,
-    hints: x => ["Le service ne peut plus écrire : regarde l'espace disque.", "df -h montre /var plein, du -sh /var/log/* désigne des journaux énormes.", "Purge les journaux et active la rotation (Équipement → la VM → Purger les journaux)."],
+    hints: x => ["Le service ne peut plus écrire : regarde l'espace disque.", "df -h montre /var plein, du -sh /var/log/* désigne des journaux énormes.", "Dans la VM : journalctl --vacuum-size=200M purge les journaux et la rotation les garde petits."],
     quiz: () => quiz2(['Les journaux ont rempli le disque de la VM', 'Le certificat a expiré', 'Un SFP est mort', 'Le VLAN est faux'],
       ['Rotation des journaux (logrotate) et alerte à 80 %', 'Supprimer la VM', 'Désactiver les journaux', 'Passer en RAID 0']),
   },
@@ -552,7 +620,7 @@ const INCIDENTS = {
     alert: x => `Conflit d'adresse détecté sur ${x.ip} (deux adresses MAC répondent)`,
     cmd: x => `arping -I vmbr0 ${x.ip}`,
     target: x => x.host,
-    hints: x => ["Le service répond une fois sur deux : deux machines ont peut-être la même IP.", `arping ${x.ip} montre deux adresses MAC différentes.`, `Cherche une VM de test sur tes hôtes (qm list) : « test-jdupont » utilise ${x.ip}. Supprime-la.`],
+    hints: x => ["Le service répond une fois sur deux : deux machines ont peut-être la même IP.", `arping ${x.ip} montre deux adresses MAC différentes.`, `Cherche une VM de test sur tes hôtes (qm list) : « test-jdupont » utilise ${x.ip}. Supprime-la : qm destroy VMID.`],
     quiz: () => quiz2(['Deux machines utilisent la même adresse IP', 'Le câble est trop long', 'Le PDU est en surcharge', 'Le DNS est faux'],
       ["Un plan d'adressage à jour et une IPAM, aucune IP posée sans la noter", 'Utiliser le DHCP en DMZ sans réservation', 'Tout mettre en /16', 'Désactiver ARP']),
   },

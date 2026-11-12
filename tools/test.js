@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
 global.localStorage = { getItem() { return null; }, setItem() { } };
-const src = ['data', 'sim', 'actions', 'learn', 'console', 'cours'].map(f => fs.readFileSync(path.join(root, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
+const src = ['data', 'sim', 'actions', 'learn', 'console', 'os', 'cours'].map(f => fs.readFileSync(path.join(root, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
 const G = new Function(src + `
 return { CAT, CABLES, MODULES, CONTRACTS, FICHES, INCIDENTS, ECO, DEFAULT_UNLOCKED,
   newState, derive, simStep, cableCheck, contractDef, devsOfKind, freeIp,
@@ -26,8 +26,8 @@ test('nouvelle partie : argent de départ, baie MMR et premier contrat', () => {
   const S = G.newState();
   eq(S.money, G.ECO.start, 'argent'); eq(S.racks.length, 1, 'baies'); eq(S.contracts[0].id, 'c1', 'contrat');
 });
-test('18 contrats : un client, une prime, et des étapes pour chaque mission', () => {
-  eq(G.CONTRACTS.length, 18, 'nombre de contrats');
+test('26 contrats : un client, une prime, et des étapes pour chaque mission', () => {
+  eq(G.CONTRACTS.length, 26, 'nombre de contrats');
   for (const c of G.CONTRACTS) {
     yes(c.client && c.what, c.id + ' sans client ou sans description');
     yes(c.bonus > 0 && Array.isArray(c.unlock) && Array.isArray(c.notions), c.id + ' : prime, déblocages ou notions absents');

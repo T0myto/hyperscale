@@ -2,11 +2,11 @@
 // Règle : le réseau d'abord. En ligne, on reçoit toujours la dernière version du jeu
 // et on en garde une copie ; hors ligne, on ressort cette copie.
 // Les polices (Google Fonts) ne changent pas : la copie gardée sert d'abord.
-const CACHE = 'hyperscale-v1';
+const CACHE = 'hyperscale-v2';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png',
   'dc/data.js', 'dc/sim.js', 'dc/actions.js', 'dc/learn.js', 'dc/console.js', 'dc/view.js', 'dc/room.js',
-  'dc/cours.js', 'dc/md.js', 'dc/audio.js', 'dc/ui.js',
+  'dc/cours.js', 'dc/md.js', 'dc/os.js', 'dc/audio.js', 'dc/laptop.js', 'dc/ui.js',
 ];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 

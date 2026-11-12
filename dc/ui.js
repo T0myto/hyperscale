@@ -78,7 +78,7 @@ function renderTop() {
   else if (!inRack && UI.layer === 'chaleur') hint = "Chaleur, température d'entrée de chaque baie : bleu = moins de 24 °C · vert = 24 à 27 °C (idéal) · orange = 27 à 32 °C · rouge = plus de 32 °C.";
   else if (!inRack && UI.layer === 'energie') hint = "Énergie, puissance consommée par chaque baie : plus l'orange est soutenu, plus la baie consomme. Le nombre écrit sur chaque baie est en kW.";
   else if (!inRack) hint = "Salle vue de dessus : clique une baie pour l'ouvrir, un emplacement libre pour installer une baie. Glisse pour déplacer la vue, molette pour zoomer.";
-  else hint = UI.face === 'rear' ? "Face arrière (allée chaude) : ports, alimentations et PDU. Clique un port libre pour tirer un câble, double-clique un équipement pour sa fenêtre de configuration. Échap : retour à la salle." : "Face avant (allée froide) : disques, voyants et unités vides. Double-clique un équipement pour sa fenêtre de configuration. Ports en face arrière (touche F).";
+  else hint = UI.face === 'rear' ? "Face arrière (allée chaude) : ports, alimentations et PDU. Clique un port libre pour tirer un câble, double-clique un équipement pour sa fenêtre. Les réglages se tapent sur le portable. Échap : retour à la salle." : "Face avant (allée froide) : disques, voyants et unités vides. Double-clique un équipement pour sa fenêtre de configuration. Ports en face arrière (touche F).";
   $('#hint').textContent = hint;
   $('#hint').classList.toggle('active', !!(UI.place || UI.from));
 }
@@ -93,7 +93,7 @@ function renderSide() {
   document.querySelectorAll('#tabs [role=tab]').forEach(t => { t.hidden = !show[t.dataset.tab]; t.setAttribute('aria-selected', String(t.dataset.tab === UI.tab)); });
   const body = $('#sidebody');
   const scroll = body.scrollTop;
-  body.innerHTML = ({ contracts: sideContracts, equip: sideEquip, tickets: sideTickets, network: sideNetwork, room: sideRoom })[UI.tab]();
+  body.innerHTML = noCfg(({ contracts: sideContracts, equip: sideEquip, tickets: sideTickets, network: sideNetwork, room: sideRoom })[UI.tab]());
   body.scrollTop = scroll;
 }
 function updateLive() { document.querySelectorAll('[data-live]').forEach(el => { const f = LIVE[el.dataset.live]; if (f) { const v = f(); if (el.innerHTML !== v) el.innerHTML = v; } }); }
@@ -115,26 +115,34 @@ function goPlug(kinds) {
   const d = all.find(x => x.psus.some(p => !p.out)) || all.find(x => x.psus.length === 2 && !CHK.ab(x)) || all[0];
   if (d) { openRack(d.rack); UI.face = 'rear'; select({ t: 'dev', d: d.id }); }
 }
-function setWinTab(d, tab, draft) { const w = WINS.find(x => x.key === 'd:' + d); if (!w) return; w.tab = tab; if (draft) w.draft = draft; renderWins(true); }
+function setWinTab(d, tab) { const w = WINS.find(x => x.key === 'd:' + d); if (!w) return; w.tab = tab === 'cli' ? 'phys' : tab; renderWins(true); if (tab === 'cli') openPc('putty'); }
+// Amène à l'appareil à configurer : sa fenêtre (port console) et le portable
+function goTerm(d) { if (d) { openRack(d.rack); UI.face = 'rear'; select({ t: 'dev', d: d.id }); openWin({ d: d.id }); } openPc('putty'); }
 function goRule(f) {
   UI.ruleDraft = { src: f[0], dst: f[1], proto: f[2], port: String(f[3]) };
   const fw = devsOfKind('fw')[0];
   if (!fw) { UI.tab = 'network'; return; }
-  openWin({ d: fw.id }); setWinTab(fw.id, 'cfg');
-  // amène la matrice de flux à l'écran, sous le réglage des ports
-  const w = WINS.find(x => x.key === 'd:' + fw.id), el = w && document.querySelector(`#${w.id} .rulecard`);
-  if (el) { el.scrollIntoView({ block: 'start' }); const p = el.querySelector('.r-port'); if (p) p.focus({ preventScroll: true }); }
+  goTerm(fw);
 }
-function goSrvCfg() { const s = devsOfKind('server')[0]; if (s) { openWin({ d: s.id }); setWinTab(s.id, 'cfg'); } }
+function goSrvCfg() { goTerm(devsOfKind('server')[0]); }
 // Ce que fait le bouton « Montrer » de chaque objectif de mission
 const GOAL_GO = {
+  pcopen: () => openPc('desk'),
+  concable: () => { const sw = devsOfKind('switch')[0]; if (sw) { openRack(sw.rack); UI.face = 'rear'; select({ t: 'dev', d: sw.id }); openWin({ d: sw.id }); } },
+  consrv: () => { const sv = devsOfKind('server')[0]; if (sv) { openRack(sv.rack); UI.face = 'rear'; select({ t: 'dev', d: sv.id }); openWin({ d: sv.id }); } },
+  confw: () => { const fw = devsOfKind('fw')[0]; if (fw) goTerm(fw); else { const r = firstRack(); if (r !== undefined) { openRack(r); openShop('fw'); } } },
+  putty: () => openPc('putty'),
+  puttyssh: () => { UI.pc.sess = null; UI.pc.putty.kind = 'ssh'; openPc('putty'); },
+  pceth: () => { const sw = devsOfKind('switch')[0]; if (sw) { const p = CAT[sw.type].ports.find(q => q.t === 'rj45' && !portCable(sw.id, q.id) && cfg(sw, q.id).mode === 'access' && cfg(sw, q.id).vlan === 99) || CAT[sw.type].ports.filter(q => q.t === 'rj45' && !portCable(sw.id, q.id)).pop(); openRack(sw.rack); UI.face = 'rear'; openWin({ d: sw.id, p: p && p.id }); } },
+  pcnet: () => openPc('net'),
+  pccmd: () => openPc('cmd'),
   rack: () => { backToRoom(); UI.tab = 'equip'; select({ t: 'slot', row: 'A', pos: 1 }); },
   shop: () => { const r = firstRack(); if (r === undefined) return GOAL_GO.rack(); openRack(r); openShop(!devsOfKind('switch').length ? 'sw24' : 'srv1'); },
   plugsw: () => goPlug(['switch']),
   plugsrv: () => goPlug(['server']),
   cablesrv: () => { const s = devsOfKind('server')[0]; goPort(s && s.id, 'eno1'); },
   cfgsrv: () => { const x = CHK.srvLinks()[0]; if (x) openWin({ d: x.o.d, p: x.o.p }); else GOAL_GO.cablesrv(); },
-  clisw: () => { const sw = devsOfKind('switch')[0]; if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli', 'show vlan brief'); } },
+  clisw: () => { const sw = devsOfKind('switch')[0]; if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli'); } },
   shopnet: () => { const r = firstRack(); if (r !== undefined) { openRack(r); openShop(!devsOfKind('router').length ? 'router' : 'fw'); } },
   plugnet: () => goPlug(['router', 'fw']),
   opmod: () => { const r = devsOfKind('router')[0]; if (!r) { goPort(); return; } openRack(r.rack); UI.face = 'rear'; select({ t: 'dev', d: r.id }); openWin({ d: r.id }); setWinTab(r.id, 'phys'); const w = WINS.find(x => x.key === 'd:' + r.id), el = w && document.querySelector(`#${w.id} .modcard`); if (el) el.scrollIntoView({ block: 'start' }); },
@@ -143,10 +151,10 @@ const GOAL_GO = {
   bpdu: () => { const x = CHK.srvLinks().find(y => !cfg(dev(y.o.d), y.o.p).bpdu) || CHK.srvLinks()[0]; if (x) openWin({ d: x.o.d, p: x.o.p }); },
   unused: () => {
     const sw = devsOfKind('switch').find(s => CAT[s.type].ports.some(p => p.role !== 'mgmt' && !portCable(s.id, p.id) && cfg(s, p.id).admin)) || devsOfKind('switch')[0];
-    if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli', cliState(sw).mode === 'exec' ? 'conf t' : `interface range ${unusedRange(sw)}`); }
+    if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli'); }
   },
   native: () => { for (const sw of devsOfKind('switch')) for (const p of CAT[sw.type].ports) { const c = cfg(sw, p.id); if (portCable(sw.id, p.id) && c.mode === 'trunk' && c.native !== 999) return openWin({ d: sw.id, p: p.id }); } },
-  clistatus: () => { const sw = devsOfKind('switch')[0]; if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli', 'show interfaces status'); } },
+  clistatus: () => { const sw = devsOfKind('switch')[0]; if (sw) { openWin({ d: sw.id }); setWinTab(sw.id, 'cli'); } },
   aclmk: () => goRouter('cfg'),
   aclspoof: () => goRouter('cfg', null, { act: 'deny', proto: 'ip', src: '10.0.0.0 0.255.255.255', dst: 'any', port: '' }),
   aclbgp: () => goRouter('cfg', null, { act: 'permit', proto: 'tcp', src: 'host 198.51.100.1', dst: 'host 198.51.100.2', port: 'bgp' }),
@@ -171,17 +179,17 @@ const GOAL_GO = {
     const m = slotMap(r); let u = RACK_U; while (u > 1 && m[u]) u--;
     openRack(r); UI.face = 'front'; select({ t: 'empty', r, u });
   },
-  clirtr: () => { const r = devsOfKind('router')[0]; if (r) { openWin({ d: r.id }); setWinTab(r.id, 'cli', 'show bgp summary'); } },
+  clirtr: () => { const r = devsOfKind('router')[0]; if (r) { openWin({ d: r.id }); setWinTab(r.id, 'cli'); } },
 };
 // Étapes d'un contrat client, déduites de ce qu'il demande
 function serviceSteps(cs) {
   const def = contractDef(cs.id), vms = S.vms.filter(v => v.k === cs.id), St = [];
   const zones = [...new Set(def.svcs.map(r => SVC[r.s].zone))];
   for (const z of zones) {
-    if (VLANS[z].gw && !def.lanOnly) St.push({ t: `Le pare-feu est la passerelle du VLAN ${z} (${VLANS[z].name}) : relie son port2 au switch en trunk, VLAN ${z} autorisé des deux côtés`, ok: CHK.fwVlan(z), fiche: 'switch',
-      go: () => { const l = CHK.fwSwitch(); if (l) openWin({ d: l.sw.d, p: l.sw.p }); else { const fw = devsOfKind('fw')[0]; goPort(fw && fw.id, 'port2'); } } });
-    St.push({ t: `Amène le VLAN ${z} jusqu'au serveur : un port du switch en access VLAN ${z}, ou un trunk qui l'autorise`, ok: CHK.vlanToServer(z), fiche: 'switch',
-      go: () => { const x = CHK.srvLinks().find(y => !carries(y.o, z)) || CHK.srvLinks()[0]; if (x) openWin({ d: x.o.d, p: x.o.p }); else GOAL_GO.cablesrv(); } });
+    if (VLANS[z].gw && !def.lanOnly) St.push({ t: `Le pare-feu est la passerelle du VLAN ${z} (${VLANS[z].name}) : relie son port2 au switch en trunk, VLAN ${z} autorisé des deux côtés`, ok: CHK.fwVlan(z), fiche: 'switch', c: `sur le pare-feu :  ip link add link port2 name port2.${z} type vlan id ${z}\nsur le switch :  interface Te1/1/1 ; switchport mode trunk ; switchport trunk allowed vlan add ${z}`,
+      go: () => { const l = CHK.fwSwitch(); if (l) goTerm(devsOfKind('fw')[0]); else { const fw = devsOfKind('fw')[0]; goPort(fw && fw.id, 'port2'); } } });
+    St.push({ t: `Amène le VLAN ${z} jusqu'au serveur : sur le switch, le port du serveur en trunk qui autorise le VLAN ${z}`, ok: CHK.vlanToServer(z), fiche: 'switch', c: `configure terminal\ninterface Gi1/0/1\nswitchport mode trunk\nswitchport trunk allowed vlan add ${z}\nend\nwrite memory`,
+      go: () => { const x = CHK.srvLinks().find(y => !carries(y.o, z)) || CHK.srvLinks()[0]; if (x) goTerm(dev(x.o.d)); else GOAL_GO.cablesrv(); } });
   }
   for (const req of def.svcs) {
     const s = SVC[req.s], list = vms.filter(v => v.svc === req.s);
@@ -190,12 +198,12 @@ function serviceSteps(cs) {
     if (req.raid) St.push({ t: req.raid === 10 ? 'Prépare une grappe RAID 10 (au moins 4 disques) sur un serveur' : 'Vérifie que le serveur a un RAID qui tolère une panne de disque (RAID 1 livré d’origine)',
       ok: [...devsOfKind('server'), ...devsOfKind('nas')].some(d => arrayInfo(d).valid && (req.raid === 10 ? d.raid === '10' : !['none', '0'].includes(d.raid))), fiche: 'raid', go: goSrvCfg });
     if (req.antiRack) St.push({ t: `Les ${req.n} VM « ${s.name} » doivent être dans ${req.n} baies différentes, chacune avec son serveur`, ok: new Set(devsOfKind('server').map(d => d.rack)).size >= req.n, fiche: 'archi', go: GOAL_GO.rack });
-    St.push({ t: `Déploie ${req.n > 1 ? req.n + ' VM' : 'la VM'} « ${s.name} » dans le VLAN ${s.zone} (${VLANS[s.zone].name})`, ok: list.length >= req.n, fiche: 'virtu', go: () => openDeploy(cs.id, req.s) });
+    St.push({ t: `Déploie ${req.n > 1 ? req.n + ' VM' : 'la VM'} « ${s.name} » dans le VLAN ${s.zone} (${VLANS[s.zone].name})`, ok: list.length >= req.n, fiche: 'virtu', c: `sur un serveur :\nqm create ${101 + S.seq.v} --name ${req.s}-0${list.length + 1} --net0 virtio,bridge=vmbr0,tag=${s.zone} --ipconfig0 ip=${freeIp(s.zone)}/24`, go: goSrvCfg });
   }
-  for (const f of def.flows) St.push({ t: `Ouvre le flux ${f[0]} → ${f[1]} ${f[2].toUpperCase()} ${f[3]} sur le pare-feu`, ok: ruleAllows(f[0], f[1], f[2], f[3]), fiche: 'pf', go: () => goRule(f) });
+  for (const f of def.flows) St.push({ t: `Ouvre le flux ${f[0]} → ${f[1]} ${f[2].toUpperCase()} ${f[3]} sur le pare-feu`, ok: ruleAllows(f[0], f[1], f[2], f[3]), fiche: 'pf', c: 'sur le pare-feu :\n' + nftLine({ src: f[0], dst: f[1], proto: f[2], port: f[3] }), go: () => goRule(f) });
   const rt = devsOfKind('router')[0], acl = rt && rt.acl && CAT.router.ports.filter(p => p.role === 'wan' && wanOp(rt, p.id)).map(p => aclIn(rt, p.id)).find(Boolean);
   if (acl) for (const f of def.flows.filter(x => x[0] === 'Internet')) St.push({ t: `L'ACL ${acl.name} du routeur doit aussi laisser passer ${f[2].toUpperCase()} ${f[3]} vers 203.0.113.10`, fiche: 'acl',
-    ok: aclEval(acl.list, { proto: f[2], src: CLIENT_IP, dst: PUB_IP, port: f[3] }).act === 'permit', go: () => goRouter('cfg', null, { act: 'permit', proto: f[2], src: 'any', dst: 'host 203.0.113.10', port: String(f[3]) }) });
+    ok: aclEval(acl.list, { proto: f[2], src: CLIENT_IP, dst: PUB_IP, port: f[3] }).act === 'permit', c: `sur le routeur, dans l'ACL ${acl.name} :\npermit ${f[2]} any host 203.0.113.10 eq ${f[3]}`, go: () => goRouter() });
   if (def.needOp2) St.push({ t: 'Achète le second opérateur (onglet Salle) et insère un module LR dans Te0/0/1 du routeur et relie-le à OP2 en fibre OS2', ok: !!(S.room.op2 && D.inet.ops >= 2), fiche: 'archi', go: () => { UI.tab = 'room'; } });
   if (def.needGen) St.push({ t: 'Installe le groupe électrogène (onglet Salle)', ok: !!S.power.gen, fiche: 'onduleur', go: () => { UI.tab = 'room'; } });
   const r = D.ct[cs.id];
@@ -205,7 +213,7 @@ function serviceSteps(cs) {
 function guideSteps(cs) {
   const def = contractDef(cs.id);
   if (!def.goals) return serviceSteps(cs);
-  const St = def.goals.map(g => ({ t: g.t, ok: g.ok(), fiche: g.fiche, go: GOAL_GO[g.k] }));
+  const St = def.goals.map(g => ({ t: g.t, ok: g.ok(), fiche: g.fiche, go: GOAL_GO[g.k], c: g.c }));
   St.push({ t: 'Valide la mission', ok: cs.state === 'active', last: true, ready: St.every(x => x.ok) });
   return St;
 }
@@ -219,7 +227,7 @@ function guideHtml(cs, St) {
       if (x.last) act = x.ready ? '' : `<span class="muted">Termine d'abord les étapes au-dessus.</span>`;
       else act = `<button class="btn small primary" data-act="gstep" data-id="${cs.id}" data-i="${i}">Montrer</button>${x.fiche ? `<button class="link" data-act="fiche" data-id="${x.fiche}">Pourquoi ?</button>` : ''}`;
     }
-    return `<li class="${cls}"><span>${esc(x.t)}</span>${act ? `<div class="gact">${act}</div>` : ''}</li>`;
+    return `<li class="${cls}"><span>${esc(x.t)}</span>${x.c && i === now ? `<pre class="gcmd" aria-label="À taper">${esc(x.c)}</pre>` : ''}${act ? `<div class="gact">${act}</div>` : ''}</li>`;
   }).join('')}</ol>`;
 }
 // Détails d'un contrat client : VM déployées et flux
@@ -274,7 +282,7 @@ function doneRow(cs) {
   return s + '</li>';
 }
 function unlockName(u) {
-  return (CAT[u] && CAT[u].name) || (CABLES[u] && CABLES[u].name) || (ROOM_ITEMS[u] && ROOM_ITEMS[u].name) || (DISKS[u] && DISKS[u].name) || ({ ram: 'Extensions de mémoire', lacp: 'LACP' }[u]) || u;
+  return (CAT[u] && CAT[u].name) || (CABLES[u] && CABLES[u].name) || (ROOM_ITEMS[u] && ROOM_ITEMS[u].name) || (DISKS[u] && DISKS[u].name) || ({ ram: 'Extensions de mémoire', lacp: 'LACP', pc: 'PC portable et PuTTY (console)', cmd: 'Invite de commandes et carte réseau du portable', ssh: 'PuTTY en SSH', web: 'Navigateur du portable' }[u]) || u;
 }
 function sideContracts() {
   const ch = curChap(), C = CHAPTERS.find(x => x.n === ch) || CHAPTERS[CHAPTERS.length - 1];
@@ -314,6 +322,11 @@ ${newChap ? `<p class="infobox">Chapitre ${def.chap} terminé ! Prochain chapitr
 function sideEquip() {
   const s = UI.sel;
   if (!s) return equipSummary();
+  if (BRIEF_T.includes(s.t) || (s.t === 'infra' && !(s.id === 'gen' && !S.power.gen))) return s.t === 'infra' ? equipInfra(s.id).replace(/<button class="btn primary" data-act="upsreset"[^>]*>[^<]*<\/button>/, '') + `<button class="btn primary" data-act="xwin">Ouvrir la fenêtre</button>` : equipBrief(s);
+  return equipFull(s);
+}
+// La carte complète d'un élément, avec ses gestes matériels : affichée dans sa fenêtre
+function equipFull(s) {
   if (s.t === 'dev') return dev(s.d) ? equipDev(dev(s.d)) : equipSummary();
   if (s.t === 'port') return dev(s.d) ? equipPort(dev(s.d), s.p) : equipSummary();
   if (s.t === 'cable') { const c = S.cables.find(x => x.id === s.c); return c ? equipCable(c) : equipSummary(); }
@@ -423,7 +436,7 @@ function equipDev(d) {
   }
   if (k === 'server') s += serverSections(d);
   if (k === 'nas') s += storageSection(d) + `<article class="card"><h4>VM stockées ici</h4>${S.vms.filter(v => v.sto === d.id).map(v => `<button class="vmrow" data-act="selvm" data-id="${v.id}">${stDot(D.vm[v.id].st)} ${esc(v.name)}</button>`).join('') || '<p class="muted">Aucune pour l’instant.</p>'}</article>`;
-  if (k === 'fw') s += `<article class="card"><h4>Pare-feu</h4><p class="muted">La matrice de flux, les VLAN routés et les protections se règlent dans l'onglet Réseau.</p><button class="btn" data-act="tab" data-tab="network">Ouvrir l'onglet Réseau</button></article>`;
+  if (k === 'fw') s += `<article class="card"><h4>Pare-feu</h4><p class="muted">Les VLAN routés et les règles se règlent au terminal du pare-feu ; l'onglet Réseau les affiche.</p><button class="btn" data-act="tab" data-tab="network">Ouvrir l'onglet Réseau</button></article>`;
   if (k === 'router') s += `<article class="card"><h4>Opérateurs</h4><div class="kv"><span>Accès Internet</span><b>${live(() => D.inet.ok ? `${D.inet.ops} lien(s), ${speedName(D.inet.cap)}` : 'coupé')}</b><span>Trafic Internet</span><b>${live(() => speedName(Math.round(D.inetUse || 0)))}</b></div>${D.inet.ok ? '' : `<p class="warnbox">${esc(D.inet.why)}</p>`}</article>`;
   if (CAT[d.type].ports.length) {
     s += `<article class="card"><h4>Ports (face arrière)</h4><table class="ptable"><thead><tr><th>Port</th><th>État</th><th>Relié à</th>${hasCfg(d, CAT[d.type].ports[0]) || kindOf(d) === 'switch' ? '<th>Mode</th>' : ''}</tr></thead><tbody>`;
@@ -496,8 +509,8 @@ function equipPort(d, pid, part) {
   }
   if (c) s += `<div class="btnrow"><button class="btn" data-act="cablerep" data-id="${c.id}">Remplacer le câble</button><button class="btn danger" data-act="unplugc" data-id="${c.id}">Débrancher</button></div>`;
   s += `</article>`;
-  if (part === 'phys') return s + (kc ? `<button class="btn primary" data-act="cfgport" data-id="${d.id}" data-p="${esc(pid)}">Configurer ce port (VLAN, mode…)</button>` : '');
-  return s + equipPortCfg(d, pid) + cliBox(d);
+  const mode = kc ? `<article class="card"><h4>Réglage du port</h4><div class="kv"><span>Mode</span><b>${kc.mode === 'access' ? 'access, VLAN ' + kc.vlan : 'trunk, VLAN ' + (kc.allowed.join(',') || 'aucun')}</b><span>État</span><b>${kc.err ? 'err-disabled' : kc.admin ? 'allumé' : 'éteint (shutdown)'}</b>${kc.desc ? `<span>Description</span><b>${esc(kc.desc)}</b>` : ''}</div><p class="note">Au terminal de ${esc(d.host)} : <span class="mono">interface ${esc(pid)}</span></p></article>` : '';
+  return s + ethButton(d, pid) + mode;
 }
 // Réglages d'un port de switch ou de pare-feu
 function equipPortCfg(d, pid) {
@@ -577,7 +590,8 @@ function equipVm(v) {
   if (s0.cert) s += `<button class="btn small ${v.cert < S.t ? 'primary' : ''}" data-act="vm" data-op="renew" data-id="${v.id}">Renouveler le certificat</button><label class="chipc"><input type="checkbox" data-act="vmtog" data-op="acme" data-id="${v.id}" ${v.acme ? 'checked' : ''}> Renouvellement ACME</label>`;
   s += `<label class="chipc"><input type="checkbox" data-act="vmtog" data-op="f2b" data-id="${v.id}" ${v.f2b ? 'checked' : ''}> fail2ban</label>`;
   s += `<button class="btn small" data-act="vm" data-op="purge" data-id="${v.id}">Purger les journaux</button><button class="btn small" data-act="vm" data-op="ram" data-id="${v.id}">Doubler la RAM</button><button class="btn small danger" data-act="vm" data-op="delete" data-id="${v.id}">Supprimer la VM</button>`;
-  return s + `</div></article>`;
+  s += `</div><p class="note">Une VM se gère au terminal. Sur son hôte ${esc(host ? host.host : '')} : <span class="mono">qm start ${v.vmid}</span>, <span class="mono">qm shutdown ${v.vmid}</span>, <span class="mono">qm reboot ${v.vmid}</span>, <span class="mono">qm destroy ${v.vmid}</span>, <span class="mono">qmrestore ${v.vmid}</span>. Pour entrer dedans : <span class="mono">qm terminal ${v.vmid}</span>, ou SSH vers ${v.ip}. Dans la VM, <span class="mono">help</span> liste ses commandes.</p>`;
+  return s + `</article>`;
 }
 function equipEmpty(r, u) {
   return `<article class="card"><header><div><div class="eyebrow">Baie ${rackName(r)}</div><h3>U${u} vide</h3></div>${pill('off', 'Libre')}</header>
@@ -632,7 +646,7 @@ function collectChip(t) {
 /* ----- Réseau ----- */
 function sideNetwork() {
   let s = `<article class="card"><h4>Plan d'adressage</h4><table class="ptable"><thead><tr><th>VLAN</th><th>Réseau</th><th>Passerelle</th></tr></thead><tbody>${VLAN_IDS.filter(v => v !== 1).map(v => `<tr><td><i class="vl" style="background:${VLANS[v].color}"></i>${v} ${VLANS[v].name}</td><td class="mono">${VLANS[v].net}.0/24</td><td class="mono">${VLANS[v].gw || '—'}</td></tr>`).join('')}</tbody></table><p class="muted">VLAN 30 non routé : seul un hôte branché dans ce VLAN atteint le stockage.</p></article>`;
-  return s + ruleCard() + protectCard();
+  return s + rulesReadonly();
 }
 // Matrice de flux : utilisée dans l'onglet Réseau et dans la fenêtre du pare-feu
 function ruleCard() {
@@ -704,7 +718,7 @@ function openShop(focus) {
   for (const k of SHOP_ORDER) {
     const c = CAT[k], ok = unlocked(c.unlock || (DEFAULT_UNLOCKED.includes(k) ? null : k));
     const locked = !ok;
-    s += `<article class="item ${focus === k ? 'focus' : ''} ${locked ? 'locked' : ''}"><div class="ipic">${catThumb(k)}</div><div class="ihead"><b>${esc(c.name)}</b><span>${money(c.cost)}</span></div><p class="muted">${c.u}U · ${c.psu ? c.psu + ' alim. · ' + c.w[0] + '–' + c.w[1] + ' W' : 'passif'}</p><p>${esc(c.desc)}</p>${locked ? `<p class="lock">Débloqué par un prochain contrat.</p>` : `<div class="qtyrow" data-item="${k}"><div class="qty" role="group" aria-label="Quantité"><button class="btn small" data-q="-1" aria-label="Une unité de moins" ${inRack ? '' : 'disabled'}>−</button><output>1</output><button class="btn small" data-q="1" aria-label="Une unité de plus" ${inRack ? '' : 'disabled'}>+</button></div><span class="qtot">${money(c.cost)}</span></div>
+    s += `<article class="item ${focus === k ? 'focus' : ''} ${locked ? 'locked' : ''}"><div class="ipic">${catThumb(k)}</div><div class="ihead"><b>${esc(c.name)}</b><span>${money(c.cost)}</span></div><p class="muted">${c.u}U · ${c.psu ? c.psu + ' alim. · ' + c.w[0] + '–' + c.w[1] + ' W' : 'passif'}</p><p>${esc(c.desc)}</p>${locked ? `<p class="lock">${lockInfo(c.unlock || k)}</p>` : `<div class="qtyrow" data-item="${k}"><div class="qty" role="group" aria-label="Quantité"><button class="btn small" data-q="-1" aria-label="Une unité de moins" ${inRack ? '' : 'disabled'}>−</button><output>1</output><button class="btn small" data-q="1" aria-label="Une unité de plus" ${inRack ? '' : 'disabled'}>+</button></div><span class="qtot">${money(c.cost)}</span></div>
 <div class="btnrow"><button class="btn primary" data-buy="${k}" ${S.money < c.cost || !inRack ? 'disabled' : ''}>Placer à la main</button><button class="btn" data-auto="${k}" ${S.money < c.cost || !inRack ? 'disabled' : ''} title="Installe dans les premières unités libres, du haut vers le bas">Installer d'office</button></div>`}</article>`;
   }
   s += `</div>`;
@@ -887,7 +901,7 @@ function openHelp(first) {
   const s = `<p class="lead">Tu reprends une salle de datacenter vide. Des clients signent des contrats : tu installes le matériel, tu câbles, tu configures et tu testes. Chaque contrat t'apprend une notion du BTS SIO SISR, des plus simples aux plus avancées.</p>
 <ol class="howto"><li><b>Lis ton contrat</b> dans le panneau de droite : il donne les étapes, une par une.</li><li><b>Clique « Montrer »</b> : le jeu t'amène au bon endroit.</li><li><b>Ouvre la fiche</b> de chaque notion (« Pourquoi ? ») : le résumé du jeu, puis ta note de cours complète.</li></ol>
 <div class="two help"><div><h4>Dans la salle</h4><ul><li><b>Glisse</b> pour déplacer la vue, <b>molette</b> pour zoomer. Sur un écran tactile : un doigt déplace, deux doigts zooment.</li><li>Clique un <b>emplacement libre</b> pour poser une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les opérateurs arrivent en <b>salle MMR</b> (à gauche), l'électricité dans le <b>local</b> à droite.</li></ul></div>
-<div><h4>Dans une baie</h4><ul><li><b>F</b> : face avant (disques) ou arrière (ports et prises). PDU A en rouge, B en bleu.</li><li><b>Double-clic</b> sur un équipement : sa fenêtre avec les onglets Physique, Config, CLI et Aide.</li><li>Clique un <b>port libre</b>, puis un second : tu poses un câble.</li></ul></div></div>
+<div><h4>Dans une baie</h4><ul><li><b>F</b> : face avant (disques) ou arrière (ports et prises). PDU A en rouge, B en bleu.</li><li><b>Double-clic</b> sur un équipement : sa fenêtre (Physique, État, Aide). On y manipule le matériel.</li><li>Les <b>réglages se tapent</b> : bouton Portable, PuTTY, en console puis en SSH.</li><li>Clique un <b>port libre</b>, puis un second : tu poses un câble.</li></ul></div></div>
 <p class="note">Échap annule ou revient à la salle · F tourne la baie · Espace met en pause · Flèches déplacent la vue · + et − zooment · 0 ajuste la vue · M coupe le son · Ctrl+S sauvegarde.</p>
 <p class="note">Ta partie s'enregistre toute seule dans ce navigateur. Le bouton <b>Sauvegarde</b>, en haut, sert à en garder une copie dans un fichier ou à recommencer. En ligne, le jeu garde aussi une copie de lui-même : il se relance sans connexion.</p>
 <div class="btnrow">${first ? '<button class="btn primary big" id="hGo">Commencer : ta première baie</button>' : ''}<button class="btn" id="hFiche">Fiches de cours</button><button class="btn" data-close>Fermer</button></div>`;
@@ -904,7 +918,7 @@ function saveLine(o) {
   return `${money(+o.money || 0)} · ${rankOf(+o.xp || 0)} · ${n} contrat${n > 1 ? 's' : ''} en service`;
 }
 // Revient à la salle, sans sélection ni fenêtre ouverte : l'ancienne vue ne correspond plus à la partie affichée
-function resetView() { UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.ctOpen = {}; UI.place = null; UI.from = null; UI.openTicket = null; WINS.length = 0; $('#console').hidden = true; }
+function resetView() { UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.ctOpen = {}; UI.place = null; UI.from = null; UI.openTicket = null; WINS.length = 0; $('#console').hidden = true; UI.pc.sess = null; UI.pc.out = []; UI.pc.err = ''; UI.pc.page = null; for (const k in CLIM) delete CLIM[k]; }
 function exportSave() {
   save();
   const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -1146,52 +1160,56 @@ const KIND_FICHES = { switch: ['switch', 'cuivre', 'fibre', 'l2sec'], router: ['
 const INFRA_FICHES = { tgbt: ['onduleur', 'elec'], upsA: ['onduleur', 'elec'], upsB: ['onduleur', 'elec'], batA: ['onduleur'], batB: ['onduleur'], gen: ['onduleur'] };
 // Mode d'emploi en trois étapes, affiché en tête de l'onglet Aide
 const KIND_GUIDE = {
-  switch: ["Branche les câbles des serveurs et du pare-feu sur les ports (onglet Physique).", "Onglet Config : mets chaque port vers un serveur en mode access, dans le VLAN de son service.", "Le port vers le pare-feu passe en trunk : il transporte plusieurs VLAN étiquetés 802.1Q."],
-  router: ["Le routeur relie la salle aux opérateurs (fibres OP1 et OP2, via l'ODF) et parle BGP avec eux. Son port LAN va vers le pare-feu.", "Onglet Config : une ACL trie ce qui arrive d'Internet. Lue de haut en bas, la première ligne qui correspond décide.", "Onglet CLI : « show bgp summary » pour les opérateurs, « show access-lists » pour les compteurs de l'ACL."],
-  fw: ["Le port côté Internet va vers le routeur, le port LAN vers le switch.", "Onglet Config : le port LAN passe en trunk avec les VLAN à router.", "La matrice de flux autorise uniquement les flux du contrat : tout le reste est refusé."],
-  server: ["Branche ses deux alimentations : une sur le PDU A, l'autre sur le PDU B.", "Relie une carte réseau au switch (onglet Physique, clic sur un port).", "Onglet Config : choisis le RAID, puis déploie les VM depuis le contrat."],
-  nas: ["Branche ses alimentations sur A et B, puis relie-le au switch.", "Ajoute des disques en face avant et choisis un niveau RAID.", "Les VM peuvent y stocker leurs disques (VLAN 30 STOCKAGE)."],
+  switch: ["Onglet Physique : alimentations, modules, câbles, et le port console où brancher ton portable.", "Tout se règle au terminal : PuTTY en console, puis en SSH une fois l'adresse de gestion et le SSH en place.", "Un port vers un serveur : access dans son VLAN. Vers le pare-feu ou un autre switch : trunk (802.1Q).", "write memory après chaque changement : sinon tout est perdu au redémarrage."],
+  router: ["Le routeur relie la salle aux opérateurs (fibres OP1 et OP2, via l'ODF) et parle BGP avec eux. Son port LAN va vers le pare-feu.", "Au terminal : une ACL trie ce qui arrive d'Internet. Lue de haut en bas, la première ligne qui correspond décide.", "« show bgp summary » pour les opérateurs, « show access-lists » pour les compteurs. write memory pour enregistrer."],
+  fw: ["Le port côté Internet va vers le routeur, le port2 vers le switch.", "Au terminal (Linux) : une sous-interface par VLAN à router, par exemple ip link add link port2 name port2.10 type vlan id 10.", "nft add rule … accept autorise un flux ; tout le reste est refusé. nft -a list ruleset montre les règles."],
+  server: ["Branche ses deux alimentations : une sur le PDU A, l'autre sur le PDU B.", "Relie une carte réseau au switch (onglet Physique, clic sur un port).", "Au terminal : mdadm pour le RAID, qm pour les machines virtuelles. « help » liste les commandes."],
+  nas: ["Branche ses alimentations sur A et B, puis relie-le au switch.", "Ajoute des disques en face avant (onglet Physique), puis crée la grappe au terminal avec mdadm.", "Les VM peuvent y stocker leurs disques (VLAN 30 STOCKAGE)."],
   odf: ["L'ODF reçoit les fibres des opérateurs (OP1, OP2).", "Insère un module LR dans une cage WAN du routeur, puis relie-la à OP1 avec une fibre monomode (OS2).", "Sans ce lien, la salle n'a pas d'accès Internet."],
 };
 function winKind(w) { return w.spec.d ? kindOf(dev(w.spec.d)) : null; }
 function winTabsOf(w) {
+  if (w.spec.pc) return PC_TABS;
+  if (w.spec.x) return [['phys', 'Physique']];
   if (!w.spec.d) return [['phys', 'Physique'], ['aide', 'Aide']];
   const k = winKind(w);
   if (['cm', 'blank', 'rogue', 'odf'].includes(k)) return [['phys', 'Physique'], ['aide', 'Aide']];
-  return [['phys', 'Physique'], ['cfg', 'Config'], ['cli', 'CLI'], ['aide', 'Aide']];
+  // le matériel se manipule ici ; les réglages se tapent au terminal du portable
+  return [['phys', 'Physique'], ['cfg', 'État'], ['aide', 'Aide']];
 }
 function openWin(spec) {
-  const key = spec.d ? 'd:' + spec.d : spec.infra ? 'i:' + spec.infra : 'c:' + spec.crac;
+  const key = spec.pc ? 'pc' : spec.x ? 'x:' + JSON.stringify(spec.x) : spec.d ? 'd:' + spec.d : spec.infra ? 'i:' + spec.infra : 'c:' + spec.crac;
   let w = WINS.find(x => x.key === key);
   if (!w) {
     const n = WINS.length, box = $('#view').getBoundingClientRect();
-    w = { key, spec, id: 'win' + (++winSeq), view: { t: 'dev', d: spec.d }, tab: 'phys', cfgPort: null, fiche: 0, draft: '',
+    w = { key, spec, id: 'win' + (++winSeq), view: { t: 'dev', d: spec.d }, tab: spec.pc ? 'desk' : 'phys', cfgPort: null, fiche: 0, draft: '',
       x: Math.max(8, Math.min(box.left + 60 + n * 34, window.innerWidth - 500)), y: Math.max(70, box.top + 50 + n * 30), z: ++winZ };
     WINS.push(w);
     if (WINS.length > 4) WINS.shift();
   } else w.z = ++winZ;
-  if (spec.p) {
-    const d = dev(spec.d), pd = portDef(d, spec.p);
-    if (hasCfg(d, pd)) { w.tab = 'cfg'; w.cfgPort = spec.p; } else { w.tab = 'phys'; w.view = { t: 'port', d: spec.d, p: spec.p }; }
-  }
+  if (spec.p) { w.tab = 'phys'; w.view = { t: 'port', d: spec.d, p: spec.p }; }
+  if (spec.view) { w.tab = 'phys'; w.view = spec.view; }
   renderWins(true);
   const el = document.getElementById(w.id); if (el) el.querySelector('.x').focus();
 }
 function closeWin(id) { const i = WINS.findIndex(w => w.id === id); if (i >= 0) { clearLive(id); WINS.splice(i, 1); } renderWins(true); }
 function winTitle(w) {
+  if (w.spec.pc) return ['PC portable', 'Console, SSH et tests réseau'];
+  if (w.spec.x) return [w.spec.x.t === 'pdu' ? 'PDU ' + w.spec.x.p : 'Détail', w.spec.x.t === 'pdu' ? 'Baie ' + rackName(w.spec.x.r) : ''];
   if (w.spec.infra) return [INFRA[w.spec.infra].label, 'Local électrique'];
   if (w.spec.crac !== undefined) return ['CRAC-' + (w.spec.crac + 1), 'Climatisation de salle'];
   const d = dev(w.spec.d);
   return [nameOf(d), `${CAT[d.type].name} · ${S.racks[d.rack].row === 'MMR' ? 'salle MMR' : 'baie ' + rackName(d.rack)}, U${d.u}`];
 }
 function winBody(w) {
+  if (w.spec.pc) return pcBody(w);
   if (w.tab === 'aide') return winAide(w);
+  if (w.spec.x) return noCfg(equipFull(w.spec.x));
   if (w.spec.infra) return equipInfra(w.spec.infra);
   if (w.spec.crac !== undefined) return equipCrac(w.spec.crac);
   const d = dev(w.spec.d);
-  if (w.tab === 'cfg') return winCfg(w, d);
-  if (w.tab === 'cli') return winCli(w, d);
-  return winPhys(w, d);
+  if (w.tab === 'cfg') return noCfg(winState(w, d));
+  return noCfg(winPhys(w, d));
 }
 
 /* ----- Onglet Physique : alimentations, ports, câbles, disques ----- */
@@ -1211,7 +1229,7 @@ function winPhys(w, d) {
   if (c.psu && k !== 'rogue') s += `<button class="btn" data-act="power" data-id="${d.id}">${d.on ? 'Éteindre' : 'Allumer'}</button>`;
   if (!c.fixed && k !== 'rogue') s += `<button class="btn" data-act="move" data-id="${d.id}">Déplacer</button>`;
   if (!c.fixed) s += `<button class="btn danger" data-act="remove" data-id="${d.id}">${k === 'rogue' ? 'Débrancher et retirer' : 'Retirer'}</button>`;
-  s += `</div></article>`;
+  s += `</div></article>` + unsavedNote(d) + consoleCard(d);
   if (c.psu && k !== 'rogue') {
     s += `<article class="card"><h4>Alimentations</h4><ul class="plist">`;
     d.psus.forEach((p, i) => {
@@ -1365,15 +1383,10 @@ function aclTester(d, L, std) {
   }
   return s + `</ul></article>`;
 }
-function goRouter(tab, draft, acl) {
-  const r = devsOfKind('router')[0]; if (!r) return;
-  openWin({ d: r.id });
-  const w = WINS.find(x => x.key === 'd:' + r.id);
-  if (w && acl) w.aclDraft = acl;
-  setWinTab(r.id, tab, draft);
-}
+function goRouter() { const r = devsOfKind('router')[0]; if (r) goTerm(r); }
 // Ouvre la CLI du routeur avec la commande qui convient au mode où il se trouve
-function goRtrCli(byMode) {
+function goRtrCli() { return goRouter(); }
+function goRtrCliOld(byMode) {
   const r = devsOfKind('router')[0]; if (!r) return;
   const m = cliState(r).mode;
   goRouter('cli', byMode[m] || (m === 'exec' ? 'conf t' : 'exit'));
@@ -1430,6 +1443,7 @@ function renderWins(force) {
       box.appendChild(el);
     }
     el.style.left = w.x + 'px'; el.style.top = w.y + 'px'; el.style.zIndex = w.z;
+    el.classList.toggle('pcwin', !!w.spec.pc);
     if (w.spec.d) el.style.setProperty('--wc', kindCol(dev(w.spec.d)));
     const [t, sub] = winTitle(w);
     el.querySelector('.wt b').textContent = t; el.querySelector('.wt .muted').textContent = sub;
@@ -1444,17 +1458,18 @@ function renderWins(force) {
     body.scrollTop = sc;
     const out = body.querySelector('.wout'); if (out) out.scrollTop = out.scrollHeight;
   }
+  const pb = document.getElementById('btnPc'); if (pb) { pb.classList.toggle('locked', !unlocked('pc')); pb.title = unlocked('pc') ? 'PC portable : console, SSH, tests réseau' : lockInfo('pc'); }
 }
 $('#windows').addEventListener('click', e => {
   const tb = e.target.closest('[data-wtab]'); if (!tb) return;
   const w = WINS.find(x => x.id === tb.closest('.win').id); if (!w) return;
   w.tab = tb.dataset.wtab;
-  if (w.tab === 'phys' && w.view.t !== 'dev' && w.view.t !== 'vm') w.view = { t: 'dev', d: w.spec.d };
+  if (w.tab === 'phys' && w.spec.d && w.view.t !== 'dev' && w.view.t !== 'vm') w.view = { t: 'dev', d: w.spec.d };
   renderWins(true);
-  if (w.tab === 'cli') { const i = document.querySelector(`#${w.id} .wcli input`); if (i) i.focus(); }
+  if (w.spec.pc) pcFocus();
 });
 $('#windows').addEventListener('submit', e => {
-  const f = e.target.closest('.wcli'); if (!f) return;
+  const f = e.target.closest('.wcli'); if (!f || f.classList.contains('pcform')) return;
   e.preventDefault();
   const w = WINS.find(x => x.id === f.closest('.win').id), v = f.querySelector('input').value;
   if (w && v.trim()) winCliRun(w, v);
@@ -1568,6 +1583,7 @@ function panelClick(e) {
     }
   }
   if (a === 'cfgport') { openWin({ d: id, p: b.dataset.p }); return; }
+  if (a === 'xwin') { const sp = UI.sel && selWinSpec(UI.sel); if (sp) openWin(sp); return; }
   switch (a) {
     case 'accept': { actAccept(id); UI.tab = 'contracts'; derive(); renderAll(); const cs = S.contracts.find(c => c.id === id); if (cs && cs.state === 'setup') openBriefing(cs); break; }
     case 'gstep': { const cs = S.contracts.find(c => c.id === id), st = cs && guideSteps(cs)[+b.dataset.i]; if (st && st.go) st.go(); renderAll(); break; }
@@ -1709,6 +1725,7 @@ $('#btnShop').addEventListener('click', () => openShop());
 $('#btnFiches').addEventListener('click', () => openFiches(UI.sel && UI.sel.t === 'disk' ? 'raid' : 'baie'));
 $('#btnHelp').addEventListener('click', () => openHelp(false));
 $('#btnSave').addEventListener('click', () => openSave());
+$('#btnPc').addEventListener('click', () => openPc('desk'));
 const syncSound = () => { const b = $('#btnSound'), t = SND.on ? 'Son activé : cliquer pour le couper (M)' : 'Son coupé : cliquer pour l’activer (M)'; b.setAttribute('aria-pressed', String(SND.on)); b.title = t; b.setAttribute('aria-label', t); };
 $('#btnSound').addEventListener('click', () => { SND.setOn(!SND.on); syncSound(); });
 syncSound();
@@ -1745,7 +1762,7 @@ function save() {
   }
   return SAVE.ok;
 }
-function validSave(o) { return !!o && typeof o === 'object' && (o.v === 4 || o.v === 5) && !!o.devs && !!o.power && Array.isArray(o.racks) && Array.isArray(o.contracts); }
+function validSave(o) { return !!o && typeof o === 'object' && o.v === 6 && !!o.pc && !!o.devs && !!o.power && Array.isArray(o.racks) && Array.isArray(o.contracts); }
 function load(o) {
   if (!validSave(o)) return false;
   S = o;

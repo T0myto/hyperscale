@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const [GAME, VAULT] = process.argv.slice(2);
 global.localStorage = { getItem() { return null; }, setItem() {} };
-const src = ['data', 'sim', 'actions', 'learn', 'console', 'cours'].map(f => fs.readFileSync(path.join(GAME, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
+const src = ['data', 'sim', 'actions', 'learn', 'console', 'os', 'cours'].map(f => fs.readFileSync(path.join(GAME, 'dc', f + '.js'), 'utf8').replace(/^'use strict';/m, '')).join('\n');
 const API = new Function(src + `
 return { COURS, FICHE_RANK, NIV_NAME, PRIO_NAME, FICHES, INCIDENTS, CAT, CABLES, MODULES, DISKS, RAID, ROOM_ITEMS, SVC, CONTRACTS, CHAPTERS, IF_CMDS, CONF_CMDS, RIF_CMDS, LINE_CMDS, VLANS, VLAN_IDS, TEACH, RANKS, ECO, ROWS, NPOS, CRAC_KW, INROW_KW, AISLES,
   newState, actAccept, actPlace, actPlug, actConnect, actModule, actPortCfg, actDeploy, actAddRule, actAddDisk, actSetRaid, actInstallRack, derive, devsOfKind, cmdList,

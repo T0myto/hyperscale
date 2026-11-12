@@ -441,6 +441,33 @@ ol.guide2{list-style:none;margin:0;padding:0;counter-reset:g;display:flex;flex-d
 .q .btn{align-self:flex-start}
 .help ul{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
 .help h4{margin:0;font:500 10.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.tbtn.locked{opacity:.5}
+.win.pcwin{width:min(760px,calc(100vw - 16px));height:min(78vh,720px)}
+.pcdesk{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.pcapp{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:var(--panel);border:1px solid var(--edge-2);border-radius:var(--r);padding:12px}
+.pcapp:hover:not(:disabled){border-color:var(--fg)}
+.pcapp svg{width:34px;height:34px;fill:none;stroke:var(--fg);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.pcapp b{font-size:13.5px;font-weight:600}
+.pcapp span{font-size:12px;color:var(--dim)}
+.pcapp.locked{opacity:.55}
+.pcbar{display:flex;align-items:center;gap:10px;font-size:13px}
+.pcbar b{font-family:var(--f-mono)}
+.pcbar .btn{margin-left:auto}
+.pcterm{min-height:340px}
+.pcterm .wout{max-height:none;min-height:260px}
+.pcterm.cmd{background:#0c0c0c}
+.pcterm.cmd .wout,.pcterm.cmd .wprompt{color:#cccccc}
+.wcli input[type=password]{letter-spacing:.2em}
+.putty input[readonly]{background:var(--panel-3);color:var(--dim)}
+.webbar{display:flex;gap:6px}
+.webbar input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--edge-2);border-radius:var(--r);padding:6px 9px;font:13px var(--f-mono)}
+.webpage{flex:1;min-height:220px;background:#fff;border:1px solid var(--edge);border-radius:var(--r);padding:22px}
+.webpage.ok{border-top:3px solid var(--ok)}
+.webpage.ko{border-top:3px solid var(--bad)}
+.webpage h3{margin:0 0 8px;font-size:19px}
+.guide2 li .gcmd{grid-column:2;min-width:0;font-weight:400}
+.gcmd{margin:0;padding:7px 9px;background:#111417;color:#d5e6da;border-radius:var(--r);font:12px/1.5 var(--f-mono);white-space:pre-wrap;word-break:break-word;user-select:text}
+.lock{margin:0;font-size:12.5px;color:var(--dim)}
 .savebox{display:grid;gap:8px}
 .savebox section{display:flex;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px}
 .savebox h4{margin:0;font:500 10.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
@@ -547,7 +574,7 @@ button.toast{text-decoration:underline;text-decoration-color:#8a9097;text-underl
 .wcli input{flex:1;min-width:0;background:transparent;border:0;color:#fff;font:12.5px var(--f-mono);outline:none}
 
 /* Adaptation aux écrans */
-@media (max-width:1420px){.tbtn .tl{display:none}.brand small{display:none}}
+@media (max-width:1560px){.tbtn .tl{display:none}.brand small{display:none}}
 @media (max-width:1100px){#main{grid-template-columns:minmax(0,1fr) 370px}.hide-md{display:none}}
 @media (max-width:1000px){#top{flex-wrap:wrap}}
 @media (max-width:820px){
@@ -584,6 +611,7 @@ button.toast{text-decoration:underline;text-decoration-color:#8a9097;text-underl
       <button data-speed="20">×20</button>
     </div>
     <button class="tbtn hl" id="btnShop" title="Catalogue"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5l6-3 6 3v6l-6 3-6-3V5Z"/><path d="M2 5l6 3 6-3M8 8v6"/></svg><span class="tl2"> Catalogue</span></button>
+    <button class="tbtn" id="btnPc" title="PC portable"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="7.5" rx="1"/><path d="M1 13h14M5.5 6l1.5 1.2L5.5 8.4M8.5 8.4h2"/></svg><span class="tl"> Portable</span></button>
     <button class="tbtn" id="btnFiches" title="Fiches de cours"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h8a2 2 0 0 1 2 2V14H5a2 2 0 0 1-2-2V2.5Z"/><path d="M3 12a2 2 0 0 1 2-2h8"/></svg><span class="tl"> Fiches de cours</span></button>
     <button class="tbtn" id="btnSave" title="Sauvegarde"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h8.6l2.4 2.4v8.6h-11v-11Z"/><path d="M5 2.5v3.4h5V2.5M4.8 13.5V9.2h6.4v4.3"/></svg><span class="tl"> Sauvegarde</span></button>
     <button class="tbtn" id="btnHelp" title="Aide"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6h.01"/></svg><span class="tl"> Aide</span></button>
@@ -652,5 +680,7 @@ button.toast{text-decoration:underline;text-decoration-color:#8a9097;text-underl
 <script src="dc/room.js"></script>
 <script src="dc/cours.js"></script>
 <script src="dc/md.js"></script>
+<script src="dc/os.js"></script>
 <script src="dc/audio.js"></script>
+<script src="dc/laptop.js"></script>
 <script src="dc/ui.js"></script>
