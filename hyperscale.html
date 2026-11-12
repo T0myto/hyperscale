@@ -72,6 +72,9 @@ code{background:var(--panel-3);padding:1px 5px;border-radius:3px}
 .seg button[aria-pressed="true"]{background:var(--fg);color:#fff}
 .tbtn{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--edge-2);border-radius:var(--r);padding:6px 12px;font-size:13px;font-weight:500}
 .tbtn:hover{border-color:var(--fg);background:var(--panel-2)}
+.tbtn.ico{padding:6px 8px}
+#btnSound[aria-pressed="true"] .off,#btnSound[aria-pressed="false"] .wv{display:none}
+#btnSound[aria-pressed="false"]{color:var(--dim)}
 .tbtn.hl{background:var(--accent);border-color:var(--accent);color:#fff}
 .tbtn.hl:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
 
@@ -95,6 +98,9 @@ text.lbl{font:500 4.8px var(--f-mono);fill:#16191d}
 .odfl{font:700 6px var(--f-display);fill:#2a3038;letter-spacing:.04em}
 .tiny{font:500 3.8px var(--f-body);fill:#ffffffcc}
 .tray{font:500 7px var(--f-body);fill:#5a6067}
+.hname{font:500 6.4px var(--f-mono);fill:#3b4652;text-anchor:end}
+.hname.on{fill:var(--accent-ink);font-weight:600}
+.hlead{stroke:#b9b9b0;stroke-width:.5;fill:none}
 .opl{font:600 7px var(--f-body);fill:#8a6a00}
 .pdul{font:700 7px var(--f-display);text-anchor:middle}
 .vtxt{font:700 6px var(--f-display);fill:#ffffff;text-anchor:middle;letter-spacing:.08em}
@@ -134,7 +140,7 @@ text.lbl{font:500 4.8px var(--f-mono);fill:#16191d}
 .acold{font:600 11px var(--f-mono);fill:#1d4f91;letter-spacing:.1em}
 .ahot{font:600 11px var(--f-mono);fill:#9a3d12;letter-spacing:.1em}
 .rkl{font:600 11px var(--f-mono);fill:#ffffff}
-.rks{font:500 8.5px var(--f-body);fill:#ffffffdd}
+.rks{font:500 9px var(--f-body);fill:#ffffff}
 .plusr{font:500 15px var(--f-mono);fill:#8f979f}
 .rowoff{font:600 10.5px var(--f-mono);fill:#4d545c;letter-spacing:.08em;paint-order:stroke;stroke:#ffffff;stroke-width:4px;stroke-linejoin:round}
 .crl{font:600 11px var(--f-mono);fill:#16191d}
@@ -143,7 +149,9 @@ text.lbl{font:500 4.8px var(--f-mono);fill:#16191d}
 .odfr{font:600 11px var(--f-mono);fill:#4a3900}
 .infl{font:600 10.5px var(--f-body);fill:#16191d}
 .infs{font:500 9px var(--f-mono);fill:#3b4b5c}
-.infl.sm{font-size:8.5px}.infs.sm{font-size:7px}
+.infs{font-weight:600;font-size:10px;fill:#16191d}
+.infl.sm{font-size:8.5px}.infs.sm{font-size:9.5px}
+.infd{font:500 8px var(--f-mono);fill:#4d545c}
 .rk,.eslot{cursor:pointer}
 .rk:hover rect:first-of-type{stroke:var(--accent)}
 .eslot:hover rect{stroke:var(--fg)}
@@ -433,6 +441,13 @@ ol.guide2{list-style:none;margin:0;padding:0;counter-reset:g;display:flex;flex-d
 .q .btn{align-self:flex-start}
 .help ul{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
 .help h4{margin:0;font:500 10.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.savebox{display:grid;gap:8px}
+.savebox section{display:flex;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);padding:12px 14px}
+.savebox h4{margin:0;font:500 10.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.savebox p{font-size:13.5px}
+.savebox .when{font-family:var(--f-mono);font-size:12.5px;color:var(--dim)}
+.savebox .pick{display:flex;flex-direction:column;gap:8px}
+.savebox .pick:empty{display:none}
 .lv{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:#1a7f4b;flex:none}
 .lv.lv2{background:#d98a00}
 .lv.lv3{background:#c62828}
@@ -532,9 +547,9 @@ button.toast{text-decoration:underline;text-decoration-color:#8a9097;text-underl
 .wcli input{flex:1;min-width:0;background:transparent;border:0;color:#fff;font:12.5px var(--f-mono);outline:none}
 
 /* Adaptation aux écrans */
-@media (max-width:1320px){.tbtn .tl{display:none}.brand small{display:none}}
+@media (max-width:1420px){.tbtn .tl{display:none}.brand small{display:none}}
 @media (max-width:1100px){#main{grid-template-columns:minmax(0,1fr) 370px}.hide-md{display:none}}
-@media (max-width:960px){#top{flex-wrap:wrap}}
+@media (max-width:1000px){#top{flex-wrap:wrap}}
 @media (max-width:820px){
   html,body{overflow:auto}
   #app{height:auto;min-height:100%}
@@ -550,7 +565,7 @@ button.toast{text-decoration:underline;text-decoration-color:#8a9097;text-underl
   .fsel{display:block}
   .fm .fbody{flex:1;padding:14px 14px 22px}
 }
-@media (max-width:480px){.tbtn .tl2{display:none}#top .spacer{display:none}#top .seg{margin-right:auto}#view #toasts{top:104px}.stat{padding:1px 10px}}
+@media (max-width:480px){.tbtn .tl2{display:none}#top{gap:6px}.tbtn,.tbtn.ico{padding:6px 7px}#top .seg button{padding:6px 8px}#top .spacer{display:none}#top .seg{margin-right:auto}#view #toasts{top:104px}.stat{padding:1px 10px}}
 @media (prefers-reduced-motion:reduce){.spin,.blink,.pulse,.pt.cand .rj,.pt.cand .cage,.pt.warn .lk,#modal,.toast{animation:none}}
 </style>
 
@@ -570,7 +585,9 @@ button.toast{text-decoration:underline;text-decoration-color:#8a9097;text-underl
     </div>
     <button class="tbtn hl" id="btnShop" title="Catalogue"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5l6-3 6 3v6l-6 3-6-3V5Z"/><path d="M2 5l6 3 6-3M8 8v6"/></svg><span class="tl2"> Catalogue</span></button>
     <button class="tbtn" id="btnFiches" title="Fiches de cours"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h8a2 2 0 0 1 2 2V14H5a2 2 0 0 1-2-2V2.5Z"/><path d="M3 12a2 2 0 0 1 2-2h8"/></svg><span class="tl"> Fiches de cours</span></button>
+    <button class="tbtn" id="btnSave" title="Sauvegarde"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5h8.6l2.4 2.4v8.6h-11v-11Z"/><path d="M5 2.5v3.4h5V2.5M4.8 13.5V9.2h6.4v4.3"/></svg><span class="tl"> Sauvegarde</span></button>
     <button class="tbtn" id="btnHelp" title="Aide"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.4M8 11.6h.01"/></svg><span class="tl"> Aide</span></button>
+    <button class="tbtn ico" id="btnSound" aria-pressed="true" title="Son"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6v4h2.4l3.6 3V3L4.9 6H2.5Z"/><path class="wv" d="M10.8 5.6a3.4 3.4 0 0 1 0 4.8M12.6 3.8a6 6 0 0 1 0 8.4"/><path class="off" d="M11 6.2l3.4 3.6M14.4 6.2L11 9.8"/></svg></button>
   </header>
 
   <main id="main">
@@ -635,4 +652,5 @@ button.toast{text-decoration:underline;text-decoration-color:#8a9097;text-underl
 <script src="dc/room.js"></script>
 <script src="dc/cours.js"></script>
 <script src="dc/md.js"></script>
+<script src="dc/audio.js"></script>
 <script src="dc/ui.js"></script>

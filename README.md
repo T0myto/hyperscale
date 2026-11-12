@@ -7,7 +7,7 @@ Jeu de gestion d'une salle de datacenter pour réviser le **BTS SIO option SISR*
 - **En ligne** : https://t0myto.github.io/hyperscale/
 - **En local** : ouvre `index.html` dans un navigateur. Le dossier `dc/` doit rester à côté.
 
-La partie est sauvegardée dans le navigateur (`localStorage`).
+La partie est sauvegardée toute seule dans le navigateur (`localStorage`). Le bouton **Sauvegarde** permet de l'enregistrer à la main (Ctrl+S), de la télécharger dans un fichier, de recharger un fichier et de recommencer une partie.
 
 ## Progression
 
@@ -38,6 +38,9 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 - **Incidents** (pannes matérielles, coupures, attaques) détectés par la supervision, le client ou l'IDS, avec une méthode de dépannage par couches OSI.
 - **24 fiches de cours**, classées par facilité puis par priorité (pastille de niveau et étoiles sur chaque fiche) : le résumé du jeu, puis la note de cours complète du vault cours-sisr-main (tableaux, encadrés, schémas Mermaid, images). Les 4 sujets propres au datacenter (baie, froid, salle, onduleurs) n'ont pas de note de cours : la fiche du jeu en tient lieu.
 - Pas de factures : seuls les contrats en service rapportent de l'argent.
+- **Sons d'interface** discrets (réussite, refus, alerte, contrat livré), fabriqués par le navigateur. Le bouton haut-parleur ou la touche M les coupe.
+- **Souris, clavier et tactile** : glisser et molette, flèches et touches + − 0, un doigt pour déplacer et deux doigts pour zoomer.
+- **Hors ligne** : en ligne, le jeu garde une copie de lui-même (service worker) et se relance sans connexion. Il peut aussi s'installer comme une application depuis le navigateur.
 
 ## Structure
 
@@ -55,7 +58,10 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 | `dc/console.js` | Console, sorties des commandes, mode configuration Cisco IOS |
 | `dc/view.js` | Vue SVG d'une baie |
 | `dc/room.js` | Vue de la salle (sol, allées, rangées, énergie, froid) |
-| `dc/ui.js` | Panneaux, guide des contrats, fenêtres à onglets |
+| `dc/ui.js` | Panneaux, guide des contrats, fenêtres à onglets, sauvegarde, boucle de jeu |
+| `dc/audio.js` | Sons d'interface (Web Audio, aucun fichier son) |
+| `sw.js` | Service worker : copie hors ligne du jeu, le réseau d'abord |
+| `manifest.webmanifest`, `icon.svg`, `icon-*.png` | Fiche et icônes de l'application installable |
 
 ## Outils
 
@@ -63,6 +69,16 @@ La partie est sauvegardée dans le navigateur (`localStorage`).
 node tools/build.js
 ```
 Régénère `index.html` après une modification de `hyperscale.html`.
+
+```bash
+node tools/test.js
+```
+Lance les tests automatiques des règles du jeu (données, modules et câbles, réseau, trois jours de simulation, sauvegarde), sans navigateur. À relancer après chaque modification de `dc/`.
+
+```bash
+node tools/gen-icons.js
+```
+Régénère les icônes PNG de l'application.
 
 ```bash
 node tools/gen-cours.js "<chemin du vault cours-sisr-main>"

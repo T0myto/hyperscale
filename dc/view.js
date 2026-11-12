@@ -239,7 +239,6 @@ function rearSVG(d) {
     s += body(x, y, W19, h, kindCol(d)) + `<rect x="${x + 6}" y="${y}" width="${W19 - 6}" height="${h}" rx="1.6" fill="#000000" opacity=".16" pointer-events="none"/>`;
     if (k === 'server') s += `<rect x="${x + 56}" y="${y + 2}" width="36" height="${h - 4}" rx="1" fill="#ffffff" fill-opacity=".07" stroke="#aab3bc" stroke-width=".5"/><text x="${x + 58}" y="${y + 6}" class="tiny">PCIe 10G</text>`;
     if (k !== 'odf') s += vent(x + 150, y + 3, 38, h - 6);
-    if (d.host && k !== 'odf') s += `<text x="${x + 112}" y="${y + h / 2 + 2}" class="rlbl">${esc(d.host)}</text>`;
     if (k === 'odf') s += `<text x="${x + 11}" y="${y + h / 2 + 2}" class="rlbl">ODF</text>`;
   }
   s += CAT[d.type].ports.map(p => portSVG(d, p, o)).join('');
@@ -326,6 +325,11 @@ function renderView(svg) {
       s += `<rect class="slot" data-k="slot" data-r="${R}" data-u="${u}" x="${X19}" y="${uTop(u, h) + 0.5}" width="${W19}" height="${h * U_PX - 1}"><title>Installer ici : baie ${rackName(R)}, U${u}${h > 1 ? '–' + (u + h - 1) : ''}</title></rect>`;
     }
   }
+  // nom de chaque équipement dans la marge, à hauteur de son unité (les deux faces)
+  for (const d of devs) if (d.host) {
+    const o = devOrigin(d), cy = o.y + (CAT[d.type].u * U_PX - 1) / 2, on = UI.sel && UI.sel.d === d.id;
+    s += `<path d="M-6 ${cy}H${o.x - 26}" class="hlead"/><text x="-9" y="${cy + 2.2}" class="hname${on ? ' on' : ''}" pointer-events="none">${esc(d.host)}</text>`;
+  }
   if (UI.face === 'front') {
     for (const d of devs) if (kindOf(d) !== 'rogue') s += frontSVG(d);
   } else {
@@ -375,15 +379,16 @@ function applyVB(svg) { const v = UI.mode === 'room' ? UI.rvb : UI.vb; if (v) sv
 function fitView(svg, mode) {
   const box = svg.getBoundingClientRect();
   const bw = box.width || 900, bh = box.height || 600, aspect = bw / bh;
+  const bar = document.getElementById('viewbar');
+  const top = Math.min(bh * 0.3, bar ? bar.offsetTop + bar.offsetHeight + 6 : 0); // pixels cachés par la barre d'outils
   if (mode === 'all') {
-    const tw = RW + 200, th = RH + 150;
-    let w = tw, h = th;
-    if (w / h > aspect) h = w / aspect; else w = h * aspect;
-    UI.vb = { x: -80 - (w - tw) / 2, y: -86, w, h };
+    const tw = RW + 200, th = RH + 150, free = bw / Math.max(1, bh - top);
+    const w = Math.max(tw, th * free), h = w / aspect;
+    UI.vb = { x: -80 - (w - tw) / 2, y: -80 - top * w / bw, w, h };
     return;
   }
   // vue de détail : environ 1,15 pixel par unité, calée sur le haut des baies
   const sc = Math.max(0.75, Math.min(1.4, bw / (RW + 140)));
   const w = bw / Math.min(sc, 1.15), h = w / aspect;
-  UI.vb = { x: -70, y: -86, w, h };
+  UI.vb = { x: -70, y: -80 - top * w / bw, w, h };
 }

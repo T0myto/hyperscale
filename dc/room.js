@@ -34,6 +34,15 @@ function rackStatus(r) {
   return list.some(d => D.powered[d.id]) ? (list.every(d => D.powered[d.id]) ? 'ok' : 'warn') : 'off';
 }
 
+const RACK_ST = { ok: 'sous tension', warn: 'en alarme', off: 'hors tension', empty: 'vide' };
+// L'état d'une baie se lit à la forme autant qu'à la couleur : rond = tout va bien, triangle = alarme, carré = éteinte, anneau = vide
+function statusMark(cx, cy, st, col) {
+  if (st === 'warn') return `<path d="M${cx} ${cy - 5.2}L${cx + 5.2} ${cy + 4}H${cx - 5.2}Z" fill="${col}" stroke="#14181c" stroke-width=".8" stroke-linejoin="round" class="pulse"/>`;
+  if (st === 'off') return `<rect x="${cx - 4}" y="${cy - 4}" width="8" height="8" rx="1" fill="${col}" stroke="#14181c" stroke-width=".8" class="pulse"/>`;
+  if (st === 'empty') return `<circle cx="${cx}" cy="${cy}" r="3.2" fill="none" stroke="${col}" stroke-width="1.6"/>`;
+  return `<circle cx="${cx}" cy="${cy}" r="4" fill="${col}" stroke="#14181c" stroke-width=".8"/>`;
+}
+
 /* ---------- Rendu ---------- */
 const ROOM_DEFS = `<defs>
 <pattern id="tiles" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#5f656c"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#878d94"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTileD)"/>${[[5, 7], [13, 20], [22, 9], [9, 25], [26, 24], [18, 4], [3, 16], [24, 15]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".5" fill="#737980" opacity=".7"/>`).join('')}${[[2.4, 2.4], [0.6 * MU - 2.4, 2.4], [2.4, 0.6 * MU - 2.4], [0.6 * MU - 2.4, 0.6 * MU - 2.4]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r=".8" fill="#555b62"/>`).join('')}</pattern>
@@ -42,14 +51,9 @@ const ROOM_DEFS = `<defs>
 <pattern id="perf" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#9fb4cc"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#cfe0f3"/>${[4, 8, 12, 16, 20, 24].map(a => [4, 8, 12, 16, 20, 24].map(b => `<circle cx="${a + 1}" cy="${b + 1}" r="1.25" fill="#5f7fa6"/>`).join('')).join('')}</pattern>
 <pattern id="hot" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#d9b9a3"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#f6dfd0"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTile)"/></pattern>
 <pattern id="rktop" width="4" height="3.4" patternUnits="userSpaceOnUse"><rect width="4" height="3.4" fill="#343a41"/><circle cx="1" cy=".85" r=".8" fill="#14181c"/><circle cx="3" cy="2.55" r=".8" fill="#14181c"/></pattern>
-<linearGradient id="gCrac" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7f9fb"/><stop offset="1" stop-color="#c4ccd4"/></linearGradient>
 <pattern id="gravel" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#ece6d6"/><circle cx="3" cy="4" r="1" fill="#d5ccb3"/><circle cx="9" cy="9" r="1.2" fill="#d9d1ba"/></pattern>
 <pattern id="tilesW" width="${0.6 * MU}" height="${0.6 * MU}" patternUnits="userSpaceOnUse"><rect width="${0.6 * MU}" height="${0.6 * MU}" fill="#d9cba6"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="#f2e9cf"/><rect x=".7" y=".7" width="${0.6 * MU - 1.4}" height="${0.6 * MU - 1.4}" rx="1" fill="url(#gTile)" opacity=".5"/></pattern>
 <pattern id="concrete" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#e4e9ee"/>${[[6, 9, 1], [22, 5, .8], [33, 18, 1.1], [12, 27, .9], [27, 33, 1], [3, 36, .7], [18, 16, .7]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="${p[2]}" fill="#c9d1da"/>`).join('')}<path d="M0 39.5H40M39.5 0V40" stroke="#d3dae2" stroke-width="1"/></pattern>
-<linearGradient id="gBox" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e3e9f0"/></linearGradient>
-<linearGradient id="gUps" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9faf0"/><stop offset="1" stop-color="#bfe9d0"/></linearGradient>
-<linearGradient id="gBat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff8e2"/><stop offset="1" stop-color="#ffe19a"/></linearGradient>
-<linearGradient id="gAlarm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0f0"/><stop offset="1" stop-color="#ffc9cb"/></linearGradient>
 <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#ffffff"/><rect width="3" height="8" fill="#eef1f4"/></pattern>
 </defs>`;
 const m = v => (v * MU).toFixed(1);
@@ -108,15 +112,15 @@ function renderRoom(svg) {
       const fill = UI.layer === 'chaleur' ? tempColor(t) : UI.layer === 'energie' ? `rgba(255,181,71,${Math.min(0.9, 0.12 + kw / 6)})` : 'url(#rktop)';
       const n = devsIn(r).filter(d => !['blank', 'cm', 'rogue'].includes(kindOf(d))).length;
       const fy = ROW_FRONT[row] > 0 ? R.y + R.h - 0.07 : R.y + 0.02;
-      s += `<g class="rk" data-k="rk" data-r="${r}"><title>${esc(`Baie ${rackName(r)} · ${n} équipement(s) · ${kw.toFixed(2)} kW · ${t.toFixed(1)} °C en entrée`)}</title>`;
+      s += `<g class="rk" data-k="rk" data-r="${r}"><title>${esc(`Baie ${rackName(r)} · ${RACK_ST[st]} · ${n} équipement(s) · ${kw.toFixed(2)} kW · ${t.toFixed(1)} °C en entrée`)}</title>`;
       s += rr2(R.x + 0.02, R.y + 0.02, R.w - 0.04, R.h - 0.04, `fill="#2a2f35" stroke="${sel ? '#e8590c' : '#0e1114'}" stroke-width="${sel ? 4 : 1.5}" rx="3"`);
       s += rr2(R.x + 0.05, R.y + 0.05, R.w - 0.1, R.h - 0.1, `fill="${fill}" rx="2"`);
-      if (UI.layer !== 'chaleur' && UI.layer !== 'energie') s += rr2(R.x + 0.05, R.y + 0.36, R.w - 0.1, R.h - 0.72, 'fill="#14181c" fill-opacity=".55" rx="2"');
+      s += rr2(R.x + 0.05, R.y + 0.36, R.w - 0.1, R.h - 0.72, `fill="#14181c" fill-opacity="${UI.layer === 'chaleur' || UI.layer === 'energie' ? '.72' : '.55'}" rx="2"`);
       s += rr2(R.x + 0.06, fy, R.w - 0.12, 0.05, 'fill="#aab3bc"');
       s += `<text x="${m(R.x + R.w / 2)}" y="${m(R.y + R.h / 2 - 0.05)}" class="rkl" text-anchor="middle">${rackName(r)}</text>`;
-      s += `<text x="${m(R.x + R.w / 2)}" y="${m(R.y + R.h / 2 + 0.2)}" class="rks" text-anchor="middle">${n ? n + ' éq.' : 'vide'}</text>`;
+      s += `<text x="${m(R.x + R.w / 2)}" y="${m(R.y + R.h / 2 + 0.2)}" class="rks" text-anchor="middle">${UI.layer === 'chaleur' ? t.toFixed(1).replace('.', ',') + '°' : UI.layer === 'energie' ? kw.toFixed(1).replace('.', ',') : n ? n + ' éq.' : 'vide'}</text>`;
       const col = { ok: '#2fe07f', warn: '#ffb020', off: '#ff5a5f', empty: '#c3cfdc' }[st];
-      s += `<circle cx="${m(R.x + R.w / 2)}" cy="${m(ROW_FRONT[row] > 0 ? R.y + 0.18 : R.y + R.h - 0.18)}" r="4" fill="${col}" class="${st === 'off' || st === 'warn' ? 'pulse' : ''}"/>`;
+      s += statusMark(+m(R.x + R.w / 2), +m(ROW_FRONT[row] > 0 ? R.y + 0.18 : R.y + R.h - 0.18), st, col);
       s += `</g>`;
     }
     s += rowEnd();
@@ -134,7 +138,7 @@ function renderRoom(svg) {
   // salle opérateurs
   s += `<text x="${m(1.3)}" y="${m(5.75)}" class="rl" text-anchor="middle">Salle opérateurs</text><text x="${m(1.3)}" y="${m(6.1)}" class="rl" text-anchor="middle">(MMR)</text>`;
   s += `<path d="M0 ${m(7.15)} H${m(MMR_RACK.x)}" stroke="#f2c230" stroke-width="3"/>${S.room.op2 ? `<path d="M0 ${m(7.45)} H${m(MMR_RACK.x)}" stroke="#f2c230" stroke-width="3"/>` : ''}`;
-  s += `<text x="${m(0.08)}" y="${m(6.95)}" class="opr">op. 1${S.room.op2 ? ' et 2' : ''}</text>`;
+  s += `<text x="${m(0.24)}" y="${m(6.95)}" class="opr">op. 1${S.room.op2 ? ' et 2' : ''}</text>`;
   {
     const R = rackRect(0), sel = UI.sel && UI.sel.t === 'rack' && UI.sel.r === 0;
     s += `<g class="rk" data-k="rk" data-r="0"><title>ODF : arrivée des fibres opérateurs (clique pour l'ouvrir)</title>${rr2(R.x, R.y, R.w, R.h, `fill="#f2b705" stroke="${sel ? '#e8590c' : '#ffffff'}" stroke-width="${sel ? 3 : 2}" rx="3"`)}${rr2(R.x + R.w - 0.06, R.y + 0.05, 0.05, R.h - 0.1, 'fill="#9cd0ff"')}<text x="${m(R.x + R.w / 2)}" y="${m(R.y + 0.38)}" class="odfr" text-anchor="middle">ODF</text></g>`;
@@ -145,14 +149,14 @@ function renderRoom(svg) {
   for (const [id, b] of Object.entries(INFRA)) {
     if (id === 'gen' && !P.gen) { s += `<g class="eslot" data-k="infra" data-id="gen"><title>Emplacement du groupe électrogène</title>${rr2(b.x, b.y, b.w, b.h, 'fill="transparent" stroke="#a9b8c8" stroke-width="1.6" stroke-dasharray="5 4" rx="2"')}<text x="${m(b.x + b.w / 2)}" y="${m(b.y + b.h / 2)}" class="plusr" text-anchor="middle">+ GE</text></g>`; continue; }
     const sel = UI.sel && UI.sel.t === 'infra' && UI.sel.id === id;
-    let fill = '#f4f4f1', txt = '', alarm = false; const sm = b.w < 1.2 ? ' sm' : '';
+    let fill = '#f4f4f1', txt = '', sub = '', alarm = false; const sm = b.w < 1.2 ? ' sm' : '';
     if (id === 'tgbt') { txt = P.edf ? 'EDF OK' : 'EDF coupé'; alarm = !P.edf; }
-    if (id.startsWith('ups')) { const u = P.ups[b.p], load = (D.ups || {})[b.p] || 0; fill = u.trip ? '#f6d5d5' : '#dcefe3'; txt = u.trip ? 'COUPÉ' : `${Math.round(load / (u.kw * 10))} % de ${u.kw} kW`; alarm = u.trip || !S.feeds[b.p]; if (!S.feeds[b.p]) txt = 'en défaut'; }
-    if (id.startsWith('bat')) { fill = '#f5e9c0'; txt = `${Math.round(P.batt)} / ${P.battMax} min`; alarm = !P.edf && !P.genRun; }
+    if (id.startsWith('ups')) { const u = P.ups[b.p], load = (D.ups || {})[b.p] || 0; fill = u.trip ? '#f6d5d5' : '#dcefe3'; txt = u.trip ? 'COUPÉ' : `${Math.round(load / (u.kw * 10))} %`; sub = `de ${u.kw} kW`; alarm = u.trip || !S.feeds[b.p]; if (!S.feeds[b.p]) txt = 'en défaut'; }
+    if (id.startsWith('bat')) { fill = '#f5e9c0'; txt = `${Math.round(P.batt)} min`; sub = `sur ${P.battMax}`; alarm = !P.edf && !P.genRun; }
     if (id === 'gen') { fill = P.genRun ? '#dcefe3' : '#f4f4f1'; txt = P.genRun ? 'EN MARCHE' : 'à l’arrêt'; }
     s += rr2(b.x + 0.05, b.y + 0.08, b.w, b.h, 'fill="#1c2a3a" opacity=".16" rx="2"');
-    s += `<g class="rk" data-k="infra" data-id="${id}"><title>${b.label}${txt ? ' · ' + txt : ''}</title>${rr2(b.x, b.y, b.w, b.h, `fill="${fill}" stroke="${sel ? '#e8590c' : alarm ? '#e5484d' : '#7f93a8'}" stroke-width="${sel ? 3 : 1.6}" rx="2" class="${alarm ? 'pulse' : ''}"`)}<circle cx="${m(b.x + b.w - 0.13)}" cy="${m(b.y + 0.13)}" r="3" fill="${alarm ? '#e5484d' : '#2fe07f'}" stroke="#ffffff" stroke-width="1"/>`;
-    s += `<text x="${m(b.x + b.w / 2)}" y="${m(b.y + Math.min(b.h / 2, 0.45))}" class="infl${sm}" text-anchor="middle">${b.label}</text><text x="${m(b.x + b.w / 2)}" y="${m(b.y + Math.min(b.h / 2, 0.45) + 0.28)}" class="infs${sm}" text-anchor="middle">${txt}</text></g>`;
+    s += `<g class="rk" data-k="infra" data-id="${id}"><title>${b.label}${txt ? ' · ' + txt + (sub ? ' ' + sub : '') : ''}</title>${rr2(b.x, b.y, b.w, b.h, `fill="${fill}" stroke="${sel ? '#e8590c' : alarm ? '#e5484d' : '#7f93a8'}" stroke-width="${sel ? 3 : 1.6}" rx="2" class="${alarm ? 'pulse' : ''}"`)}<circle cx="${m(b.x + b.w - 0.13)}" cy="${m(b.y + 0.13)}" r="3" fill="${alarm ? '#e5484d' : '#2fe07f'}" stroke="#ffffff" stroke-width="1"/>`;
+    s += `<text x="${m(b.x + b.w / 2)}" y="${m(b.y + Math.min(b.h / 2, 0.45))}" class="infl${sm}" text-anchor="middle">${b.label}</text><text x="${m(b.x + b.w / 2)}" y="${m(b.y + Math.min(b.h / 2, 0.45) + 0.28)}" class="infs${sm}" text-anchor="middle">${txt}</text>${sub ? `<text x="${m(b.x + b.w / 2)}" y="${m(b.y + Math.min(b.h / 2, 0.45) + 0.52)}" class="infd" text-anchor="middle">${sub}</text>` : ''}</g>`;
   }
   svg.innerHTML = s;
   if (!UI.rvb) fitRoom(svg);

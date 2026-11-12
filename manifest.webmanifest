@@ -1,0 +1,19 @@
+{
+  "name": "Hyperscale — simulateur de datacenter",
+  "short_name": "Hyperscale",
+  "description": "Jeu de gestion d'une salle de datacenter pour réviser le BTS SIO option SISR.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#e6e6e1",
+  "theme_color": "#16191d",
+  "categories": ["education", "games"],
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

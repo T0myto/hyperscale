@@ -18,6 +18,7 @@ function toast(msg, kind, onClick) {
   const el = document.createElement(onClick ? 'button' : 'div');
   el.className = 'toast ' + (kind || '');
   el.textContent = msg;
+  SND.play(kind === 'gold' ? 'win' : kind === 'good' ? 'ok' : kind === 'bad' ? 'bad' : 'tick');
   if (onClick) el.addEventListener('click', () => { onClick(); el.remove(); });
   const box = $('#toasts'); box.appendChild(el);
   while (box.children.length > 4) box.firstChild.remove();
@@ -25,7 +26,7 @@ function toast(msg, kind, onClick) {
 }
 function act(fn) {
   const r = fn();
-  if (typeof r === 'string') toast(r, 'bad');
+  if (typeof r === 'string') toast(r, 'bad'); else SND.play('plug');
   derive(); renderAll();
   return r;
 }
@@ -74,6 +75,8 @@ function renderTop() {
   let hint = '';
   if (UI.place) hint = `Choisis un emplacement libre (en vert) pour : ${CAT[UI.place.type].name}${UI.place.move ? ' (déplacement)' : UI.place.left > 1 ? ` · encore ${UI.place.left} à placer` : ''} · Échap pour arrêter`;
   else if (UI.from) hint = `Câblage depuis ${nameOf(dev(UI.from.d))} ${UI.from.p} (baie ${rackName(dev(UI.from.d).rack)}) : clique un second port libre compatible (il brille), dans cette baie ou dans une autre · Échap pour annuler`;
+  else if (!inRack && UI.layer === 'chaleur') hint = "Chaleur, température d'entrée de chaque baie : bleu = moins de 24 °C · vert = 24 à 27 °C (idéal) · orange = 27 à 32 °C · rouge = plus de 32 °C.";
+  else if (!inRack && UI.layer === 'energie') hint = "Énergie, puissance consommée par chaque baie : plus l'orange est soutenu, plus la baie consomme. Le nombre écrit sur chaque baie est en kW.";
   else if (!inRack) hint = "Salle vue de dessus : clique une baie pour l'ouvrir, un emplacement libre pour installer une baie. Glisse pour déplacer la vue, molette pour zoomer.";
   else hint = UI.face === 'rear' ? "Face arrière (allée chaude) : ports, alimentations et PDU. Clique un port libre pour tirer un câble, double-clique un équipement pour sa fenêtre de configuration. Échap : retour à la salle." : "Face avant (allée froide) : disques, voyants et unités vides. Double-clique un équipement pour sa fenêtre de configuration. Ports en face arrière (touche F).";
   $('#hint').textContent = hint;
@@ -883,16 +886,101 @@ function openRecette(cs) {
 function openHelp(first) {
   const s = `<p class="lead">Tu reprends une salle de datacenter vide. Des clients signent des contrats : tu installes le matériel, tu câbles, tu configures et tu testes. Chaque contrat t'apprend une notion du BTS SIO SISR, des plus simples aux plus avancées.</p>
 <ol class="howto"><li><b>Lis ton contrat</b> dans le panneau de droite : il donne les étapes, une par une.</li><li><b>Clique « Montrer »</b> : le jeu t'amène au bon endroit.</li><li><b>Ouvre la fiche</b> de chaque notion (« Pourquoi ? ») : le résumé du jeu, puis ta note de cours complète.</li></ol>
-<div class="two help"><div><h4>Dans la salle</h4><ul><li><b>Glisse</b> pour déplacer la vue, <b>molette</b> pour zoomer.</li><li>Clique un <b>emplacement libre</b> pour poser une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les opérateurs arrivent en <b>salle MMR</b> (à gauche), l'électricité dans le <b>local</b> à droite.</li></ul></div>
+<div class="two help"><div><h4>Dans la salle</h4><ul><li><b>Glisse</b> pour déplacer la vue, <b>molette</b> pour zoomer. Sur un écran tactile : un doigt déplace, deux doigts zooment.</li><li>Clique un <b>emplacement libre</b> pour poser une baie, une <b>baie</b> pour l'ouvrir.</li><li>Les opérateurs arrivent en <b>salle MMR</b> (à gauche), l'électricité dans le <b>local</b> à droite.</li></ul></div>
 <div><h4>Dans une baie</h4><ul><li><b>F</b> : face avant (disques) ou arrière (ports et prises). PDU A en rouge, B en bleu.</li><li><b>Double-clic</b> sur un équipement : sa fenêtre avec les onglets Physique, Config, CLI et Aide.</li><li>Clique un <b>port libre</b>, puis un second : tu poses un câble.</li></ul></div></div>
-<p class="note">Échap annule ou revient à la salle · F tourne la baie · Espace met en pause.</p>
-<div class="btnrow">${first ? '<button class="btn primary big" id="hGo">Commencer : ta première baie</button>' : ''}<button class="btn" id="hFiche">Fiches de cours</button><button class="btn" data-close>Fermer</button>${first ? '' : '<button class="btn danger" id="hReset">Nouvelle partie</button>'}</div>`;
+<p class="note">Échap annule ou revient à la salle · F tourne la baie · Espace met en pause · Flèches déplacent la vue · + et − zooment · 0 ajuste la vue · M coupe le son · Ctrl+S sauvegarde.</p>
+<p class="note">Ta partie s'enregistre toute seule dans ce navigateur. Le bouton <b>Sauvegarde</b>, en haut, sert à en garder une copie dans un fichier ou à recommencer. En ligne, le jeu garde aussi une copie de lui-même : il se relance sans connexion.</p>
+<div class="btnrow">${first ? '<button class="btn primary big" id="hGo">Commencer : ta première baie</button>' : ''}<button class="btn" id="hFiche">Fiches de cours</button><button class="btn" data-close>Fermer</button></div>`;
   modal(first ? 'Bienvenue dans ton datacenter' : 'Aide', s, m => {
     const go = m.querySelector('#hGo'); if (go) go.addEventListener('click', () => { actAccept('c1'); UI.tab = 'contracts'; closeModal(); derive(); renderAll(); const cs = S.contracts.find(c => c.id === 'c1'); if (cs) openBriefing(cs); });
     m.querySelector('#hFiche').addEventListener('click', () => openFiches('baie'));
-    const rs = m.querySelector('#hReset');
-    if (rs) { let armed = false; rs.addEventListener('click', () => { if (!armed) { armed = true; rs.textContent = 'Confirmer : tout effacer ?'; return; } newState(); UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.ctOpen = {}; WINS.length = 0; closeModal(); derive(); renderAll(); openHelp(true); }); }
   }, true);
+}
+
+/* ---------- Sauvegarde : dans le navigateur, dans un fichier, nouvelle partie ---------- */
+const ago = ms => { const s = Math.round((Date.now() - ms) / 1000); return s < 5 ? "à l'instant" : s < 60 ? `il y a ${s} s` : `il y a ${Math.round(s / 60)} min`; };
+function saveLine(o) {
+  const n = (o.contracts || []).filter(c => c.state === 'active').length;
+  return `${money(+o.money || 0)} · ${rankOf(+o.xp || 0)} · ${n} contrat${n > 1 ? 's' : ''} en service`;
+}
+// Revient à la salle, sans sélection ni fenêtre ouverte : l'ancienne vue ne correspond plus à la partie affichée
+function resetView() { UI.sel = null; UI.vb = null; UI.rvb = null; UI.mode = 'room'; UI.rack = null; UI.ctOpen = {}; UI.place = null; UI.from = null; UI.openTicket = null; WINS.length = 0; $('#console').hidden = true; }
+function exportSave() {
+  save();
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const name = `hyperscale-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}h${p(d.getMinutes())}.json`;
+  const url = URL.createObjectURL(new Blob([JSON.stringify({ jeu: 'hyperscale', date: d.toISOString(), etat: S })], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast(`Partie enregistrée dans le fichier ${name}. Regarde dans tes téléchargements.`, 'good');
+}
+function readSave(file, done) {
+  if (file.size > 8e6) return done(null, "Ce fichier est trop gros pour être une sauvegarde du jeu.");
+  const r = new FileReader();
+  r.onerror = () => done(null, "Impossible de lire ce fichier.");
+  r.onload = () => {
+    let o = null;
+    try { o = JSON.parse(r.result); } catch (e) { }
+    const date = o && o.etat && typeof o.date === 'string' && !isNaN(Date.parse(o.date)) ? o.date : null;
+    if (o && o.etat) o = o.etat;
+    done(validSave(o) ? { o, date } : null, "Ce fichier n'est pas une sauvegarde d'Hyperscale.");
+  };
+  r.readAsText(file);
+}
+// Remplace la partie en cours. Si le fichier fait planter le jeu, on remet la partie d'avant.
+function applySave(o) {
+  const back = JSON.stringify(S);
+  try { if (!load(o)) throw new Error('sauvegarde refusée'); resetView(); derive(); renderAll(); }
+  catch (e) { S = JSON.parse(back); resetView(); derive(); renderAll(); return false; }
+  save();
+  return true;
+}
+function openSave() {
+  const s = `<p class="lead">Ta partie s'enregistre toute seule dans ce navigateur : toutes les 15 secondes et quand tu quittes la page.</p>
+<div class="savebox">
+<section><h4>Dans ce navigateur</h4><p id="svNow"></p><p class="when" id="svWhen"></p><div class="btnrow"><button class="btn primary" id="svSave">Sauvegarder maintenant</button></div></section>
+<section><h4>Dans un fichier</h4><p>Pour garder une copie de secours, ou continuer ta partie sur un autre ordinateur ou un autre navigateur.</p><div class="btnrow"><button class="btn" id="svExport">Télécharger ma partie</button><button class="btn" id="svImport">Charger un fichier</button></div><input type="file" id="svFile" accept=".json,application/json" hidden><div class="pick" id="svPick"></div></section>
+<section><h4>Recommencer</h4><p>Efface la partie en cours et repart d'une salle vide avec ${money(ECO.start)}. Télécharge-la d'abord si tu veux la garder.</p><div class="btnrow"><button class="btn danger" id="svReset">Nouvelle partie</button></div></section>
+</div>
+<div class="btnrow"><button class="btn" data-close>Fermer</button></div>`;
+  modal('Sauvegarde', s, m => {
+    const q = id => m.querySelector(id);
+    const state = () => {
+      const now = q('#svNow'), w = q('#svWhen'); if (!now || !w) return;
+      now.textContent = 'Partie en cours : ' + saveLine(S) + '.';
+      w.className = SAVE.ok ? 'when' : 'warnbox';
+      w.textContent = !SAVE.ok ? "Ce navigateur refuse d'enregistrer la partie (navigation privée ou stockage bloqué). Télécharge-la dans un fichier pour ne pas la perdre."
+        : SAVE.at ? 'Dernière sauvegarde : ' + ago(SAVE.at) + '.' : 'Pas encore sauvegardée.';
+    };
+    state();
+    const iv = setInterval(state, 1000);
+    modalClose = () => clearInterval(iv);
+    q('#svSave').addEventListener('click', () => { if (save()) toast('Partie sauvegardée.', 'good'); state(); });
+    q('#svExport').addEventListener('click', exportSave);
+    const file = q('#svFile'), pick = q('#svPick');
+    const say = (cls, txt) => { pick.innerHTML = `<p class="${cls}"></p>`; pick.firstChild.textContent = txt; };
+    q('#svImport').addEventListener('click', () => { file.value = ''; file.click(); });
+    file.addEventListener('change', () => {
+      const f = file.files[0]; if (!f) return;
+      readSave(f, (res, err) => {
+        if (!res) return say('warnbox', err);
+        const when = res.date ? ' du ' + new Date(res.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        say('infobox', `Fichier${when} : ${saveLine(res.o)}.`);
+        pick.insertAdjacentHTML('beforeend', '<div class="btnrow"><button class="btn primary" id="svLoad">Remplacer ma partie par celle-ci</button><button class="btn" id="svCancel">Annuler</button></div>');
+        q('#svCancel').addEventListener('click', () => { pick.innerHTML = ''; });
+        q('#svLoad').addEventListener('click', () => {
+          if (applySave(res.o)) { closeModal(); toast('Partie chargée.', 'good'); }
+          else say('warnbox', "Ce fichier est abîmé : ta partie en cours a été gardée.");
+        });
+      });
+    });
+    const rs = q('#svReset'); let armed = false;
+    rs.addEventListener('click', () => {
+      if (!armed) { armed = true; rs.textContent = 'Confirmer : tout effacer ?'; return; }
+      newState(); resetView(); closeModal(); derive(); renderAll(); save(); openHelp(true);
+    });
+  });
 }
 
 
@@ -951,7 +1039,7 @@ $('#ctg').addEventListener('change', e => { const [t, id] = e.target.value.split
 $('#cclose').addEventListener('click', () => { $('#console').hidden = true; });
 
 /* ---------- Événements du jeu ---------- */
-function onTicket(t) { toast(`Ticket n° ${t.id} : ${INCIDENTS[t.type].title}`, 'bad', () => { UI.tab = 'tickets'; UI.openTicket = t.id; renderAll(); }); }
+function onTicket(t) { SND.play('alert'); toast(`Ticket n° ${t.id} : ${INCIDENTS[t.type].title}`, 'bad', () => { UI.tab = 'tickets'; UI.openTicket = t.id; renderAll(); }); }
 function onTicketFixed(t) { toast(`Ticket n° ${t.id} corrigé : rédige le rapport`, 'good', () => { UI.tab = 'tickets'; renderAll(); openReport(t); }); }
 function onInternet(I) { toast(I.ok ? 'Accès Internet actif.' : 'Internet coupé : ' + I.why, I.ok ? 'good' : 'bad'); }
 function onFiche(f) { toast(`Nouvelle notion : ${f.title} (ouvrir la fiche)`, 'info', () => openFiches(f.id)); }
@@ -991,13 +1079,34 @@ function select(sel) {
   }
   renderAll();
 }
-let pan = null, panMoved = false;
+let pan = null, panMoved = false, pinch = null;
+const pts = new Map();
+const capture = id => { try { svg.setPointerCapture(id); } catch (e) { } };
+const mid = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
 svg.addEventListener('pointerdown', e => {
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pts.size === 2 && getVB()) {
+    // Deux doigts : on zoome et on déplace la vue, sans cliquer sur ce qu'il y a dessous
+    pan = null; panMoved = true; capture(e.pointerId);
+    pinch = { ...mid(), vb: { ...getVB() } };
+    return;
+  }
+  if (pts.size > 1) return;
   panMoved = false;
   const el = e.target.closest('[data-k]');
-  if (e.button === 1 || !el || el.dataset.k === 'empty' || el.dataset.k === 'aisle') { pan = { x: e.clientX, y: e.clientY, vb: { ...getVB() } }; svg.setPointerCapture(e.pointerId); }
+  if (e.button === 1 || !el || el.dataset.k === 'empty' || el.dataset.k === 'aisle') { pan = { x: e.clientX, y: e.clientY, vb: { ...getVB() } }; capture(e.pointerId); }
 });
 svg.addEventListener('pointermove', e => {
+  if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && pts.size === 2) {
+    const m2 = mid(), r = svg.getBoundingClientRect(), v = getVB(), o = pinch.vb;
+    const nw = clampN(o.w * pinch.d / m2.d, 140, 4000), nh = nw * o.h / o.w;
+    // Le point de la salle qui était entre les deux doigts reste entre les deux doigts
+    const wx = o.x + (pinch.x - r.left) / r.width * o.w, wy = o.y + (pinch.y - r.top) / r.height * o.h;
+    v.x = wx - (m2.x - r.left) / r.width * nw; v.y = wy - (m2.y - r.top) / r.height * nh; v.w = nw; v.h = nh;
+    applyVB(svg);
+    return;
+  }
   if (!pan) return;
   const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
   if (Math.abs(dx) + Math.abs(dy) > 4) panMoved = true;
@@ -1006,7 +1115,9 @@ svg.addEventListener('pointermove', e => {
   v.x = pan.vb.x - dx * sc; v.y = pan.vb.y - dy * sc; applyVB(svg);
   svg.classList.add('panning');
 });
-svg.addEventListener('pointerup', () => { pan = null; svg.classList.remove('panning'); });
+const endPointer = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; pan = null; svg.classList.remove('panning'); };
+svg.addEventListener('pointerup', endPointer);
+svg.addEventListener('pointercancel', endPointer);
 svg.addEventListener('wheel', e => {
   e.preventDefault();
   const r = svg.getBoundingClientRect(), f = Math.exp(e.deltaY * 0.0012);
@@ -1597,22 +1708,46 @@ document.querySelectorAll('[data-layer]').forEach(b => b.addEventListener('click
 $('#btnShop').addEventListener('click', () => openShop());
 $('#btnFiches').addEventListener('click', () => openFiches(UI.sel && UI.sel.t === 'disk' ? 'raid' : 'baie'));
 $('#btnHelp').addEventListener('click', () => openHelp(false));
+$('#btnSave').addEventListener('click', () => openSave());
+const syncSound = () => { const b = $('#btnSound'), t = SND.on ? 'Son activé : cliquer pour le couper (M)' : 'Son coupé : cliquer pour l’activer (M)'; b.setAttribute('aria-pressed', String(SND.on)); b.title = t; b.setAttribute('aria-label', t); };
+$('#btnSound').addEventListener('click', () => { SND.setOn(!SND.on); syncSound(); });
+syncSound();
 window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); if (save()) toast('Partie sauvegardée.', 'good'); return; }
   if (e.target.closest('input, textarea, select')) { if (e.key === 'Escape') e.target.blur(); return; }
   if (e.key === 'Escape') { if (!$('#modal').hidden) closeModal(); else if (WINS.length && e.target.closest('.win')) closeWin(e.target.closest('.win').id); else if (UI.place || UI.from) { UI.place = null; UI.from = null; renderAll(); } else if (!$('#console').hidden) $('#console').hidden = true; else if (UI.mode === 'rack') backToRoom(); else { UI.sel = null; renderAll(); } }
   else if (!$('#modal').hidden) return;
   else if ((e.key === 'f' || e.key === 'F') && UI.mode === 'rack') { UI.face = UI.face === 'front' ? 'rear' : 'front'; renderAll(); }
   else if (e.key === ' ') { e.preventDefault(); S.speed = S.speed ? 0 : 1; renderTop(); }
-  else if (e.key === '+') zoomAt(0.5, 0.5, 0.8);
+  else if (e.key === '+' || e.key === '=') zoomAt(0.5, 0.5, 0.8);
   else if (e.key === '-') zoomAt(0.5, 0.5, 1.25);
+  else if (e.key === '0') $('#zfit').click();
+  else if (e.key === 'm' || e.key === 'M') $('#btnSound').click();
+  else if (/^Arrow/.test(e.key) && getVB() && (e.target === document.body || e.target.closest('#view'))) {
+    e.preventDefault();
+    const v = getVB(), k = e.shiftKey ? 0.3 : 0.1;
+    if (e.key === 'ArrowLeft') v.x -= v.w * k; else if (e.key === 'ArrowRight') v.x += v.w * k;
+    else if (e.key === 'ArrowUp') v.y -= v.h * k; else v.y += v.h * k;
+    applyVB(svg);
+  }
 });
 
 /* ---------- Rendu global, sauvegarde, boucle ---------- */
-function renderAll() { renderView(svg); renderTop(); renderSide(); renderWins(); if (!$('#console').hidden) renderConsole(); }
+// La barre d'outils d'abord : le cadrage de la vue dépend de sa hauteur
+function renderAll() { renderTop(); renderView(svg); renderSide(); renderWins(); if (!$('#console').hidden) renderConsole(); }
 const SAVE_KEY = 'hyperscale-dc-v4';
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { } }
+const SAVE = { at: 0, ok: true, warned: false };
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); SAVE.at = Date.now(); SAVE.ok = true; }
+  catch (e) {
+    SAVE.ok = false;
+    if (!SAVE.warned) { SAVE.warned = true; toast("La sauvegarde automatique ne marche pas dans ce navigateur. Clique ici pour enregistrer ta partie dans un fichier.", 'bad', openSave); }
+  }
+  return SAVE.ok;
+}
+function validSave(o) { return !!o && typeof o === 'object' && (o.v === 4 || o.v === 5) && !!o.devs && !!o.power && Array.isArray(o.racks) && Array.isArray(o.contracts); }
 function load(o) {
-  if (!o || (o.v !== 4 && o.v !== 5) || !o.devs || !o.power) return false;
+  if (!validSave(o)) return false;
   S = o;
   if (S.v === 4) migrateV4();
   S.cli = S.cli || []; S.timers = S.timers || {}; S.flags = S.flags || {}; S.teach = S.teach || [];
@@ -1630,9 +1765,21 @@ function migrateV4() {
   if (!S.contracts.some(c => c.state === 'setup')) offerNext();
 }
 let last = 0, acc = 0, viewT = 0, sideT = 0, liveT = 0, saveT = 0;
+// Une erreur est signalée une seule fois au joueur ; le détail va dans la console du navigateur
+const ERR = { n: 0 };
+function gameError(e) {
+  if (ERR.n++) return;
+  console.error(e);
+  toast("Le jeu a rencontré une erreur. Si quelque chose ne répond plus, recharge la page : ta partie est enregistrée régulièrement.", 'bad');
+}
+window.addEventListener('error', e => gameError(e.error || e.message));
 function frame(now) {
+  try { tick(now); } catch (e) { gameError(e); }
+  requestAnimationFrame(frame);
+}
+function tick(now) {
   const dt = Math.min(0.25, (now - last) / 1000 || 0); last = now;
-  acc += dt * S.speed;
+  acc = Math.min(acc + dt * S.speed, 60);
   let steps = 0, changed = false;
   while (acc >= 1 && steps < 40) { simStep(1); acc -= 1; steps++; changed = true; }
   if (D.dirty) { derive(); changed = true; }
@@ -1641,7 +1788,6 @@ function frame(now) {
   if (liveT > 0.4) { liveT = 0; updateLive(); }
   if (sideT > 2.5) { sideT = 0; renderSide(); renderWins(); }
   if (saveT > 15) { saveT = 0; save(); }
-  requestAnimationFrame(frame);
 }
 function start(data) {
   let fresh = false;
@@ -1652,8 +1798,10 @@ function start(data) {
   }
   derive();
   renderAll();
+  save();
   if (window.ResizeObserver) new ResizeObserver(() => { const v = getVB(); if (v) { const r = svg.getBoundingClientRect(); v.h = v.w * r.height / Math.max(1, r.width); applyVB(svg); } }).observe(svg);
   if (fresh) openHelp(true);
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.claude) navigator.serviceWorker.register('sw.js').catch(() => { });
   requestAnimationFrame(t => { last = t; frame(t); });
 }
 window.addEventListener('pagehide', save);

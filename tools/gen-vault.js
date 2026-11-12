@@ -827,8 +827,9 @@ tags: [jeu-sisr, jeu]
 
 ← ${ACCUEIL}
 
-- **En ligne** : [Hyperscale](${GAME_URL}). La partie est sauvegardée dans le navigateur.
+- **En ligne** : [Hyperscale](${GAME_URL}). La partie est sauvegardée toute seule dans le navigateur.
 - **Hors ligne** : dans l'explorateur Windows, ouvre le dossier \`Jeu\` de ce vault et double-clique sur \`hyperscale.html\`. Garde le dossier \`dc\` à côté : il contient le code du jeu. La partie hors ligne est séparée de la partie en ligne.
+- **Sauvegarde** : le bouton Sauvegarde, en haut du jeu, télécharge ta partie dans un fichier. Charge ce fichier pour la reprendre ailleurs : en ligne, hors ligne ou sur un autre ordinateur.
 
 ## Fichiers
 
@@ -845,7 +846,8 @@ tags: [jeu-sisr, jeu]
 | \`dc/console.js\` | Console et sorties des commandes |
 | \`dc/view.js\` | Dessin d'une baie, face avant et face arrière |
 | \`dc/room.js\` | La salle vue de dessus |
-| \`dc/ui.js\` | Panneaux, fenêtres, recette, console, boucle de jeu |
+| \`dc/ui.js\` | Panneaux, fenêtres, recette, console, sauvegarde, boucle de jeu |
+| \`dc/audio.js\` | Sons d'interface |
 
 > [!tip] Prendre en main
 > - Le panneau **Contrats** donne les étapes une par une. Le bouton « Montrer » t'amène au bon endroit, « Pourquoi ? » ouvre la fiche de cours.
